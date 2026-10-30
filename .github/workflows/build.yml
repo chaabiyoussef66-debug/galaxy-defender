@@ -42,7 +42,10 @@ jobs:
 
       - name: Build Android APK
         run: |
-          buildozer android debug
+          set +e
+          yes | buildozer android debug
+          result=${PIPESTATUS[1]}
+          exit "$result"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
