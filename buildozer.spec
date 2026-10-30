@@ -9,7 +9,7 @@ source.include_exts = py,txt,png,jpg,jpeg,wav,ogg
 
 version = 2.0
 
-requirements = python3,kivy,pygame
+requirements = python3,pygame
 
 orientation = landscape
 fullscreen = 1
