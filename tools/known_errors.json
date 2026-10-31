@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "pwritev-python",
+      "pattern": "call to undeclared function ['\\\"]?pwritev|implicit declaration of function ['\\\"]?pwritev",
+      "title": "مشكلة توافق في بناء Python / pwritev",
+      "explanation": "المترجم C لا يتعرف على الدالة pwritev أثناء بناء Python أو أحد مكوناته. هذا خطأ توافق في بيئة البناء أو نسخة المصدر، وليس خطأً عادياً في كود اللعبة.",
+      "suggestion": "احتفظ بمقتطف الخطأ الكامل وراجع توافق نسخة Python وNDK وpython-for-android. لا تغيّر NDK أو ملفات النظام عشوائياً؛ يلزم اختيار تركيبة إصدارات متوافقة."
+    },
+    {
+      "id": "clang-c-compile",
+      "pattern": "clang: error:|fatal error:.*file not found|error: .* undeclared|error: .* not supported",
+      "title": "خطأ مترجم C / clang",
+      "explanation": "فشل تجميع ملف C/C++ أو لم يجد المترجم ملفاً أو تصريحاً مطلوباً.",
+      "suggestion": "راجع أول رسالة clang error والأسطر التي تسبقها. تأكد من توافق NDK والمكتبة التي يجري بناؤها، ثم عالج السبب المحدد قبل إعادة البناء."
+    },
+    {
+      "id": "pygame-build",
+      "pattern": "pygame.*(error|failed)|ERROR:.*pygame|Could not build wheels for pygame",
+      "title": "فشل بناء pygame",
+      "explanation": "تعذر بناء أو تجهيز مكتبة pygame ضمن Android.",
+      "suggestion": "تحقق من recipe المحلية وإصدار pygame ومتطلبات SDL2 وCython. تأكد أن السجل يحدد مرحلة الفشل قبل تعديل recipe."
+    },
+    {
+      "id": "cython",
+      "pattern": "Cython.*(error|failed)|cythonize.*error|CompileError:",
+      "title": "مشكلة Cython",
+      "explanation": "فشل تحويل ملفات Cython أو أن إصدار Cython غير متوافق مع الحزمة.",
+      "suggestion": "قارن إصدار Cython المطلوب من recipe مع الإصدار المثبت، ثم استخدم إصداراً متوافقاً موثقاً."
+    },
+    {
+      "id": "sdl",
+      "pattern": "SDL2.*(error|failed|not found)|sdl2.*(error|failed|not found)",
+      "title": "مشكلة SDL2",
+      "explanation": "فشل إعداد أو بناء SDL2 أو أحد مكوناته اللازمة للتطبيق.",
+      "suggestion": "راجع أول خطأ في recipe الخاصة بـ SDL2 وتأكد من متطلبات Android وNDK قبل تغيير إعدادات المشروع."
+    },
+    {
+      "id": "android-sdk-ndk",
+      "pattern": "Android NDK.*(not found|not installed)|SDK location not found|No toolchains found|ndk.*does not exist",
+      "title": "مشكلة Android SDK أو NDK",
+      "explanation": "أداة البناء لم تعثر على SDK أو NDK أو toolchain المطلوبة.",
+      "suggestion": "راجع إعدادات Buildozer وإصدارات SDK/NDK ومساراتها في سجل البناء، وتأكد أن التنزيل اكتمل."
+    },
+    {
+      "id": "java",
+      "pattern": "Unsupported class file major version|JAVA_HOME.*(not set|invalid)|Could not determine java version",
+      "title": "مشكلة Java",
+      "explanation": "نسخة Java أو إعداد JAVA_HOME لا يتوافق مع أدوات البناء.",
+      "suggestion": "تحقق من java -version وJAVA_HOME، واستخدم نسخة Java المتوافقة مع إصدار Buildozer/python-for-android المستخدم."
+    },
+    {
+      "id": "disk-space",
+      "pattern": "No space left on device|Errno 28",
+      "title": "المساحة التخزينية غير كافية",
+      "explanation": "بيئة GitHub Actions نفدت منها مساحة التخزين أثناء البناء أو فك الملفات.",
+      "suggestion": "راجع حجم الملفات المؤقتة والـ artifacts، وقلل الملفات غير الضرورية أو استخدم تنظيفاً آمناً قبل البناء."
+    },
+    {
+      "id": "network-download",
+      "pattern": "Connection timed out|Temporary failure in name resolution|Could not resolve host|HTTP Error 5[0-9][0-9]|Connection reset by peer",
+      "title": "فشل تنزيل اعتماد أو الاتصال بالشبكة",
+      "explanation": "تعذر تنزيل مصدر أو اعتماد بسبب اتصال الشبكة أو الخادم.",
+      "suggestion": "تحقق من عنوان المصدر وحالة الخدمة، ثم أعد المحاولة. لا تغيّر إصدارات المكتبات لمجرد خطأ اتصال."
+    },
+    {
+      "id": "python-traceback",
+      "pattern": "Traceback \\(most recent call last\\):|ModuleNotFoundError:|ImportError:",
+      "title": "خطأ Python أو اعتماد ناقص",
+      "explanation": "ظهر استثناء Python أو تعذر استيراد وحدة مطلوبة.",
+      "suggestion": "اقرأ آخر سطر في traceback لتحديد اسم الوحدة أو سبب الاستثناء، ثم تحقق من requirements والبيئة."
+    }
+  ]
+}
