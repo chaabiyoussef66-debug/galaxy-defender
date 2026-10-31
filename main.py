@@ -3,6 +3,8 @@ import pygame
 import random
 import math
 import os
+import sys
+import traceback
 import array
 
 pygame.init()
@@ -16,6 +18,50 @@ except pygame.error:
 
 W, H = 480, 760
 screen = pygame.display.set_mode((W, H))
+
+# Show unexpected Python errors on-screen instead of silently closing.
+def show_crash(exc_type, exc_value, exc_tb):
+    details = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+    try:
+        log_path = os.path.join(os.path.expanduser("~"), "galaxy_crash.txt")
+        with open(log_path, "w", encoding="utf-8") as log_file:
+            log_file.write(details)
+    except Exception:
+        pass
+
+    try:
+        pygame.display.set_caption("GALAXY DEFENDER - ERROR")
+        error_font = pygame.font.Font(None, 22)
+        lines = details.strip().splitlines()
+        running_error = True
+        while running_error:
+            for error_event in pygame.event.get():
+                if error_event.type == pygame.QUIT:
+                    running_error = False
+            screen.fill((18, 5, 15))
+            title_image = pygame.font.Font(None, 32).render(
+                "GAME ERROR - SEND THIS SCREEN", True, (255, 100, 100)
+            )
+            screen.blit(title_image, (12, 12))
+            y = 55
+            for line in lines[-26:]:
+                # Keep long traceback lines inside the phone screen.
+                for start in range(0, max(1, len(line)), 48):
+                    part = line[start:start + 48]
+                    image = error_font.render(part, True, (255, 235, 235))
+                    screen.blit(image, (12, y))
+                    y += 22
+                    if y > screen.get_height() - 12:
+                        break
+                if y > screen.get_height() - 12:
+                    break
+            pygame.display.flip()
+            pygame.time.wait(150)
+        pygame.quit()
+    except Exception:
+        pass
+
+sys.excepthook = show_crash
 pygame.display.set_caption("GALAXY DEFENDER ULTIMATE V2")
 clock = pygame.time.Clock()
 
