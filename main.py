@@ -1,67 +1,74 @@
 
-import pygame
-import random
-import math
 import os
 import sys
 import traceback
-import array
 
-pygame.init()
-
-# Sound is optional: the game still works if audio is unavailable.
-try:
-    pygame.mixer.init(frequency=22050, size=-16, channels=1, buffer=512)
-    AUDIO = True
-except pygame.error:
-    AUDIO = False
-
-W, H = 480, 760
-screen = pygame.display.set_mode((W, H))
-
-# Show unexpected Python errors on-screen instead of silently closing.
+# Install the crash hook before importing or initializing pygame.
 def show_crash(exc_type, exc_value, exc_tb):
     details = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
     try:
-        log_path = os.path.join(os.path.expanduser("~"), "galaxy_crash.txt")
-        with open(log_path, "w", encoding="utf-8") as log_file:
+        base_dir = os.environ.get("ANDROID_PRIVATE") or os.path.expanduser("~")
+        os.makedirs(base_dir, exist_ok=True)
+        with open(os.path.join(base_dir, "galaxy_crash.txt"), "w", encoding="utf-8") as log_file:
             log_file.write(details)
+            log_file.flush()
     except Exception:
         pass
 
+    # If SDL/Pygame is usable, keep an error screen open for the user.
     try:
-        pygame.display.set_caption("GALAXY DEFENDER - ERROR")
+        import pygame
+        if not pygame.get_init():
+            pygame.init()
+        info = pygame.display.Info()
+        width = max(480, info.current_w or 480)
+        height = max(320, info.current_h or 760)
+        error_screen = pygame.display.set_mode((width, height))
+        pygame.display.set_caption("GALAXY DEFENDER - STARTUP ERROR")
         error_font = pygame.font.Font(None, 22)
+        title_font = pygame.font.Font(None, 30)
         lines = details.strip().splitlines()
-        running_error = True
-        while running_error:
-            for error_event in pygame.event.get():
-                if error_event.type == pygame.QUIT:
-                    running_error = False
-            screen.fill((18, 5, 15))
-            title_image = pygame.font.Font(None, 32).render(
-                "GAME ERROR - SEND THIS SCREEN", True, (255, 100, 100)
-            )
-            screen.blit(title_image, (12, 12))
-            y = 55
-            for line in lines[-26:]:
-                # Keep long traceback lines inside the phone screen.
-                for start in range(0, max(1, len(line)), 48):
-                    part = line[start:start + 48]
-                    image = error_font.render(part, True, (255, 235, 235))
-                    screen.blit(image, (12, y))
+        active = True
+        while active:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    active = False
+            error_screen.fill((18, 5, 15))
+            error_screen.blit(title_font.render("STARTUP ERROR - PLEASE SEND SCREENSHOT", True, (255, 100, 100)), (10, 10))
+            y = 52
+            for line in lines[-24:]:
+                for offset in range(0, max(1, len(line)), 48):
+                    error_screen.blit(error_font.render(line[offset:offset+48], True, (255, 235, 235)), (10, y))
                     y += 22
-                    if y > screen.get_height() - 12:
+                    if y > height - 10:
                         break
-                if y > screen.get_height() - 12:
+                if y > height - 10:
                     break
             pygame.display.flip()
             pygame.time.wait(150)
         pygame.quit()
     except Exception:
+        # Native SDL failures may prevent an on-screen Python traceback.
         pass
 
 sys.excepthook = show_crash
+
+import pygame
+import random
+import math
+import array
+
+pygame.init()
+
+# Audio is optional on Android.
+try:
+    pygame.mixer.init(frequency=22050, size=-16, channels=1, buffer=512)
+    AUDIO = True
+except Exception:
+    AUDIO = False
+
+W, H = 480, 760
+screen = pygame.display.set_mode((W, H))
 pygame.display.set_caption("GALAXY DEFENDER ULTIMATE V2")
 clock = pygame.time.Clock()
 
