@@ -1,9 +1,9 @@
 
 [app]
 
-title = Galaxy Defender Test
+title = Galaxy Defender Test 2.2
 
-package.name = galaxydefendertest
+package.name = galaxydefendertest22
 
 package.domain = org.chaabi
 
