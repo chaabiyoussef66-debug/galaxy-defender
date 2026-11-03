@@ -9,37 +9,11 @@ class Pygame261Recipe(Pygame2Recipe):
     hostpython_prerequisites = ["setuptools", "cython>=3.1"]
 
     def prebuild_arch(self, arch):
-        super().prebuild_arch(arch)
-
         build_dir = Path(self.get_build_dir(arch.arch))
 
-        # Cython already initializes the extension type's __dict__.
-        # Assigning to self.__dict__ in pygame 2.6.1 is rejected by
-        # current Cython versions, so replace that redundant assignment.
-        sprite_file = (
-            build_dir
-            / "src_c"
-            / "cython"
-            / "pygame"
-            / "_sprite.pyx"
-        )
-        source = sprite_file.read_text(encoding="utf-8")
-        old_line = "        self.__dict__ = {}"
-        if old_line not in source:
-            raise RuntimeError(
-                "Expected pygame 2.6.1 _sprite.pyx line was not found; "
-                "refusing to apply an unverified patch."
-            )
-
-        sprite_file.write_text(
-            source.replace(old_line, "        pass", 1),
-            encoding="utf-8",
-        )
-
-        # pygame 2.6.1's Android SDL2 template omits the SIMD blitter
-        # translation units. surface.so then links with unresolved
-        # blitter symbols and fails to load on real ARM devices, even
-        # though the APK build itself succeeds.
+        # Patch the Android template BEFORE the parent recipe generates
+        # the actual Setup file from it. Patching it after super().prebuild_arch
+        # is too late: the generated Setup would still omit these sources.
         setup_file = build_dir / "buildconfig" / "Setup.Android.SDL2.in"
         template = setup_file.read_text(encoding="utf-8")
         old_surface = (
@@ -67,6 +41,26 @@ class Pygame261Recipe(Pygame2Recipe):
                     )
             setup_file.write_text(
                 template.replace(old_surface, new_surface, 1),
+                encoding="utf-8",
+            )
+
+        # Parent recipe now generates Setup using the patched template.
+        super().prebuild_arch(arch)
+
+        # Cython already initializes the extension type's __dict__.
+        # Assigning to self.__dict__ is rejected by current Cython.
+        sprite_file = (
+            build_dir
+            / "src_c"
+            / "cython"
+            / "pygame"
+            / "_sprite.pyx"
+        )
+        source = sprite_file.read_text(encoding="utf-8")
+        old_line = "        self.__dict__ = {}"
+        if old_line in source:
+            sprite_file.write_text(
+                source.replace(old_line, "        pass", 1),
                 encoding="utf-8",
             )
 
