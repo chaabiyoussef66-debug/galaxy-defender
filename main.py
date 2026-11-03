@@ -265,7 +265,7 @@ def reset_game():
     boss_done = 0
     shake = 0
 
-MENU, PLAY, PAUSE, OVER = range(4)
+MENU, PLAY, PAUSE, OVER, EXIT_CONFIRM = range(5)
 state = MENU
 touching = False
 touch_pos = (W / 2, H - 100)
@@ -274,9 +274,12 @@ pause_button = pygame.Rect(W - 100, 72, 88, 34)
 play_button = pygame.Rect(90, 365, 300, 60)
 resume_button = pygame.Rect(90, 355, 300, 55)
 menu_button = pygame.Rect(90, 425, 300, 55)
+exit_button = pygame.Rect(90, 390, 300, 58)
+cancel_exit_button = pygame.Rect(90, 465, 300, 55)
 
 reset_game()
 running = True
+paused_from_play = False
 
 while running:
     dt = min(clock.tick(60), 40)
@@ -287,13 +290,12 @@ while running:
             running = False
 
         elif event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_ESCAPE:
-                if state == PLAY:
-                    state = PAUSE
-                elif state == PAUSE:
-                    state = PLAY
-                else:
-                    running = False
+            back_keys = (pygame.K_ESCAPE, getattr(pygame, "K_AC_BACK", pygame.K_ESCAPE))
+            if event.key in back_keys:
+                # Android phone Back opens a clear exit confirmation.
+                paused_from_play = state in (PLAY, PAUSE)
+                state = EXIT_CONFIRM
+                touching = False
 
             if event.key in (pygame.K_SPACE, pygame.K_RETURN):
                 if state in (MENU, OVER):
@@ -336,6 +338,12 @@ while running:
                 elif menu_button.collidepoint(pos):
                     state = MENU
 
+            elif state == EXIT_CONFIRM:
+                if exit_button.collidepoint(pos):
+                    running = False
+                elif cancel_exit_button.collidepoint(pos):
+                    state = PLAY if paused_from_play else MENU
+
         elif event.type == pygame.MOUSEMOTION:
             if touching:
                 touch_pos = event.pos
@@ -373,6 +381,12 @@ while running:
                     state = PLAY
                 elif menu_button.collidepoint(pos):
                     state = MENU
+
+            elif state == EXIT_CONFIRM:
+                if exit_button.collidepoint(pos):
+                    running = False
+                elif cancel_exit_button.collidepoint(pos):
+                    state = PLAY if paused_from_play else MENU
 
         elif event.type == pygame.FINGERMOTION:
             touch_pos = (int(event.x * W), int(event.y * H))
@@ -652,6 +666,16 @@ while running:
         text("BEST: " + str(best_score), font, YELLOW, W / 2, 350, True)
         draw_button(play_button, "PLAY AGAIN", CYAN)
         draw_button(menu_button, "MAIN MENU", PURPLE)
+
+    elif state == EXIT_CONFIRM:
+        # Dim the current screen and ask before closing the app.
+        overlay = pygame.Surface((W, H), pygame.SRCALPHA)
+        overlay.fill((0, 0, 15, 205))
+        screen.blit(overlay, (0, 0))
+        text("EXIT GAME?", big, YELLOW, W / 2, 300, True)
+        text("Do you want to close Galaxy Defender?", small, WHITE, W / 2, 345, True)
+        draw_button(exit_button, "EXIT GAME", RED)
+        draw_button(cancel_exit_button, "CANCEL", GREEN)
 
     pygame.display.flip()
 
