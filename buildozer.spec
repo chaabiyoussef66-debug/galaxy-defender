@@ -11,7 +11,7 @@ source.dir = .
 
 source.include_exts = py,txt,png,jpg,jpeg,wav,ogg,ttf
 
-version = 2.1
+version = 2.2
 
 requirements = python3,pygame
 
