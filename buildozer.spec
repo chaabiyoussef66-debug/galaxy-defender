@@ -1,9 +1,9 @@
 
 [app]
 
-title = Galaxy Defender Test 2.3
+title = Galaxy Defender 2.4
 
-package.name = galaxydefendertest23
+package.name = galaxydefenderbackfix
 
 package.domain = org.chaabi
 
@@ -11,7 +11,7 @@ source.dir = .
 
 source.include_exts = py,txt,png,jpg,jpeg,wav,ogg,ttf
 
-version = 2.3
+version = 2.4
 
 requirements = python3,pygame
 
