@@ -39,7 +39,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install buildozer
-          python -m pip install "Cython==3.1.2"
+          python -m pip install "Cython==0.29.37"
 
       - name: Check environment
         run: |
