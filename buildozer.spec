@@ -1,9 +1,9 @@
 
 [app]
 
-title = Galaxy Defender Ultimate
+title = Galaxy Defender Test
 
-package.name = galaxydefender
+package.name = galaxydefendertest
 
 package.domain = org.chaabi
 
@@ -11,7 +11,7 @@ source.dir = .
 
 source.include_exts = py,txt,png,jpg,jpeg,wav,ogg,ttf
 
-version = 2.0
+version = 2.1-test
 
 requirements = python3,pygame
 
@@ -42,4 +42,3 @@ p4a.local_recipes = ./p4a-recipes
 log_level = 2
 
 warn_on_root = 1
-
