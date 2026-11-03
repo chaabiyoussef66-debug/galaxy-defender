@@ -1,4 +1,6 @@
 from pathlib import Path
+import subprocess
+import sys
 
 from pythonforandroid.recipes.pygame import Pygame2Recipe
 
@@ -6,14 +8,11 @@ from pythonforandroid.recipes.pygame import Pygame2Recipe
 class Pygame261Recipe(Pygame2Recipe):
     version = "2.6.1"
     url = "https://github.com/pygame/pygame/archive/{version}.tar.gz"
-    hostpython_prerequisites = ["setuptools", "cython>=3.1"]
 
     def prebuild_arch(self, arch):
         build_dir = Path(self.get_build_dir(arch.arch))
 
-        # Patch the Android template BEFORE the parent recipe generates
-        # the actual Setup file from it. Patching it after super().prebuild_arch
-        # is too late: the generated Setup would still omit these sources.
+        # Generate the Android Setup file from the patched SDL2 template.
         setup_file = build_dir / "buildconfig" / "Setup.Android.SDL2.in"
         template = setup_file.read_text(encoding="utf-8")
         old_surface = (
@@ -44,17 +43,13 @@ class Pygame261Recipe(Pygame2Recipe):
                 encoding="utf-8",
             )
 
-        # Parent recipe now generates Setup using the patched template.
+        # Generate Setup using the patched template.
         super().prebuild_arch(arch)
 
         # Cython already initializes the extension type's __dict__.
         # Assigning to self.__dict__ is rejected by current Cython.
         sprite_file = (
-            build_dir
-            / "src_c"
-            / "cython"
-            / "pygame"
-            / "_sprite.pyx"
+            build_dir / "src_c" / "cython" / "pygame" / "_sprite.pyx"
         )
         source = sprite_file.read_text(encoding="utf-8")
         old_line = "        self.__dict__ = {}"
@@ -63,6 +58,18 @@ class Pygame261Recipe(Pygame2Recipe):
                 source.replace(old_line, "        pass", 1),
                 encoding="utf-8",
             )
+
+        # IMPORTANT:
+        # p4a builds pygame using its private HostPython. Cython installed
+        # on the GitHub runner is NOT installed in that private interpreter.
+        # Compile the .pyx sources now with the runner Python (which has
+        # Cython 3.1.2), so pygame's later HostPython build uses generated
+        # C sources and does not try to import Cython again.
+        subprocess.run(
+            [sys.executable, "setup.py", "cython_only"],
+            cwd=str(build_dir),
+            check=True,
+        )
 
 
 recipe = Pygame261Recipe()
