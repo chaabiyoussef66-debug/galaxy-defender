@@ -3,7 +3,7 @@
 
 title = Galaxy Defender Ultimate
 
-package.name = galaxydefender
+package.name = galaxydefenderbackfix
 
 package.domain = org.chaabi
 
@@ -11,7 +11,7 @@ source.dir = .
 
 source.include_exts = py,txt,png,jpg,jpeg,wav,ogg,ttf
 
-version = 2.0
+version = 2.5
 
 requirements = python3,pygame
 
