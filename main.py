@@ -413,7 +413,8 @@ while running:
             enemies.append([
                 random.randint(25, W - 25), -25,
                 base_speed * (0.78 if kind == "tank" else 1.15 if kind == "scout" else 1),
-                radius, kind, hp, random.random() * math.tau
+                radius, kind, hp, random.random() * math.tau,
+                random.randint(25, W - 25)
             ])
             spawn_timer = 0
 
@@ -423,8 +424,9 @@ while running:
             kind, hp = e[4], e[5]
 
             if kind == "zigzag":
-                e[0] += math.sin(pygame.time.get_ticks() / 230 + e[6]) * (2.2 + level * 0.025)
-                ex = max(radius, min(W - radius, e[0]))
+                e[0] = e[7] + math.sin(pygame.time.get_ticks() / 230 + e[6]) * (34 + level * 0.4)
+                e[0] = max(radius, min(W - radius, e[0]))
+                ex = e[0]
 
             if kind == "tank":
                 pygame.draw.circle(screen, PURPLE, (int(ex), int(ey)), radius)
