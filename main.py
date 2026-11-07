@@ -410,11 +410,12 @@ while running:
             base_speed = random.uniform(1.5, 2.8) + level * 0.15
             radius = 25 if kind == "tank" else random.randint(14, 20)
             hp = 2 if kind == "tank" else 1
+            spawn_x = random.randint(25, W - 25)
             enemies.append([
-                random.randint(25, W - 25), -25,
+                spawn_x, -25,
                 base_speed * (0.78 if kind == "tank" else 1.15 if kind == "scout" else 1),
                 radius, kind, hp, random.random() * math.tau,
-                random.randint(25, W - 25)
+                spawn_x
             ])
             spawn_timer = 0
 
