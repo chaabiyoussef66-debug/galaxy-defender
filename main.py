@@ -353,11 +353,14 @@ while running:
 
         # Boss every five levels
         if level % 5 == 0 and boss is None and boss_done < level:
+            boss_type = (level // 5 - 1) % 3
             boss = {
                 "x": W / 2, "y": 155,
                 "hp": 40 + level * 5,
                 "maxhp": 40 + level * 5,
-                "dir": 1, "fire": 0
+                "dir": 1, "fire": 0,
+                "type": boss_type,
+                "phase": 0
             }
             boss_done = level
             enemies.clear()
@@ -395,24 +398,54 @@ while running:
 
         # Enemy spawning
         if boss is None and spawn_timer > max(300, 850 - level * 35):
+            kind = random.choices(
+                ["scout", "zigzag", "tank"],
+                weights=[
+                    max(25, 65 - level * 2),
+                    min(45, 25 + level),
+                    min(35, 10 + level * 2)
+                ],
+                k=1
+            )[0]
+            base_speed = random.uniform(1.5, 2.8) + level * 0.15
+            radius = 25 if kind == "tank" else random.randint(14, 20)
+            hp = 2 if kind == "tank" else 1
             enemies.append([
                 random.randint(25, W - 25), -25,
-                random.uniform(1.5, 2.8) + level * 0.15,
-                random.randint(14, 21)
+                base_speed * (0.78 if kind == "tank" else 1.15 if kind == "scout" else 1),
+                radius, kind, hp, random.random() * math.tau
             ])
             spawn_timer = 0
 
         for e in enemies[:]:
             e[1] += e[2]
-            ex, ey, speed, radius = e
+            ex, ey, speed, radius = e[:4]
+            kind, hp = e[4], e[5]
 
-            pygame.draw.polygon(screen, RED, [
-                (int(ex), int(ey + radius)),
-                (int(ex - radius), int(ey - radius)),
-                (int(ex), int(ey - radius // 2)),
-                (int(ex + radius), int(ey - radius))
-            ])
-            pygame.draw.circle(screen, ORANGE, (int(ex), int(ey)), 4)
+            if kind == "zigzag":
+                e[0] += math.sin(pygame.time.get_ticks() / 230 + e[6]) * (2.2 + level * 0.025)
+                ex = max(radius, min(W - radius, e[0]))
+
+            if kind == "tank":
+                pygame.draw.circle(screen, PURPLE, (int(ex), int(ey)), radius)
+                pygame.draw.circle(screen, ORANGE, (int(ex), int(ey)), radius - 7, 3)
+                pygame.draw.circle(screen, WHITE, (int(ex), int(ey)), 5)
+            elif kind == "zigzag":
+                pygame.draw.polygon(screen, YELLOW, [
+                    (int(ex), int(ey + radius)),
+                    (int(ex - radius), int(ey)),
+                    (int(ex), int(ey - radius)),
+                    (int(ex + radius), int(ey))
+                ])
+                pygame.draw.circle(screen, RED, (int(ex), int(ey)), 4)
+            else:
+                pygame.draw.polygon(screen, RED, [
+                    (int(ex), int(ey + radius)),
+                    (int(ex - radius), int(ey - radius)),
+                    (int(ex), int(ey - radius // 2)),
+                    (int(ex + radius), int(ey - radius))
+                ])
+                pygame.draw.circle(screen, ORANGE, (int(ex), int(ey)), 4)
 
             hit = False
             for b in bullets[:]:
@@ -422,17 +455,19 @@ while running:
                     break
 
             if hit:
-                enemies.remove(e)
-                score += 10
-                explosion(ex, ey, random.choice([ORANGE, CYAN, PURPLE]))
+                e[5] -= 1
+                explosion(ex, ey, random.choice([ORANGE, CYAN, PURPLE]), 10)
                 play_sound(hit_sound)
 
-                if random.random() < 0.20:
-                    drops.append([
-                        ex, ey,
-                        random.choice(["shield", "weapon"])
-                    ])
-                continue
+                if e[5] <= 0:
+                    enemies.remove(e)
+                    score += 20 if kind == "tank" else 10
+                    if random.random() < (0.28 if kind == "tank" else 0.18):
+                        drops.append([
+                            ex, ey,
+                            random.choice(["shield", "weapon"])
+                        ])
+                    continue
 
             if ey > H + 25:
                 enemies.remove(e)
@@ -452,7 +487,14 @@ while running:
 
         # Boss
         if boss is not None:
-            boss["x"] += boss["dir"] * (2 + level * 0.08)
+            boss["phase"] += dt
+            boss_type = boss["type"]
+            move_speed = (2.0 + level * 0.07) * (1.35 if boss_type == 2 else 1)
+            boss["x"] += boss["dir"] * move_speed
+            if boss_type == 1:
+                boss["y"] = 150 + math.sin(boss["phase"] / 520) * 32
+            else:
+                boss["y"] = 155
 
             if boss["x"] > W - 75:
                 boss["dir"] = -1
@@ -460,23 +502,58 @@ while running:
                 boss["dir"] = 1
 
             boss["fire"] += dt
-            if boss["fire"] > 900:
-                for dx, speed in [(-30, 3.5), (0, 4), (30, 3.5)]:
-                    enemy_bullets.append([
-                        boss["x"] + dx, boss["y"] + 32, speed
-                    ])
+            fire_delay = 760 if boss_type == 2 else 900
+            if boss["fire"] > fire_delay:
+                if boss_type == 0:
+                    # Commander: a five-shot spread.
+                    for dx in (-2.4, -1.2, 0, 1.2, 2.4):
+                        enemy_bullets.append([
+                            boss["x"], boss["y"] + 32, dx, 4.0
+                        ])
+                elif boss_type == 1:
+                    # Hunter: aim toward the player's current position.
+                    dx = px - boss["x"]
+                    dy = py - boss["y"]
+                    length = max(1, math.hypot(dx, dy))
+                    vx, vy = dx / length * 4.2, dy / length * 4.2
+                    for spread in (-0.35, 0, 0.35):
+                        enemy_bullets.append([
+                            boss["x"], boss["y"] + 25,
+                            vx + spread * 3, vy
+                        ])
+                else:
+                    # Destroyer: a wide seven-shot fan.
+                    for dx in (-3.6, -2.4, -1.2, 0, 1.2, 2.4, 3.6):
+                        enemy_bullets.append([
+                            boss["x"], boss["y"] + 32, dx, 3.8
+                        ])
                 boss["fire"] = 0
 
             bx, by = int(boss["x"]), int(boss["y"])
 
             # Boss glow
+            boss_color = [RED, YELLOW, PURPLE][boss_type]
             pygame.draw.circle(screen, (45, 15, 100), (bx, by), 59)
-            pygame.draw.circle(screen, PURPLE, (bx, by), 49, 3)
-            pygame.draw.polygon(screen, RED, [
-                (bx, by - 40), (bx - 55, by - 12),
-                (bx - 42, by + 30), (bx, by + 18),
-                (bx + 42, by + 30), (bx + 55, by - 12)
-            ])
+            pygame.draw.circle(screen, boss_color, (bx, by), 49, 3)
+            if boss_type == 1:
+                pygame.draw.polygon(screen, YELLOW, [
+                    (bx, by - 48), (bx - 48, by - 5),
+                    (bx - 28, by + 34), (bx, by + 18),
+                    (bx + 28, by + 34), (bx + 48, by - 5)
+                ])
+            elif boss_type == 2:
+                pygame.draw.rect(screen, PURPLE, (bx - 48, by - 34, 96, 68), border_radius=15)
+                pygame.draw.polygon(screen, RED, [
+                    (bx - 48, by - 20), (bx - 65, by),
+                    (bx - 48, by + 20), (bx + 48, by + 20),
+                    (bx + 65, by), (bx + 48, by - 20)
+                ])
+            else:
+                pygame.draw.polygon(screen, RED, [
+                    (bx, by - 40), (bx - 55, by - 12),
+                    (bx - 42, by + 30), (bx, by + 18),
+                    (bx + 42, by + 30), (bx + 55, by - 12)
+                ])
             pygame.draw.circle(screen, ORANGE, (bx, by), 14)
             pygame.draw.circle(screen, WHITE, (bx, by), 5)
 
@@ -500,10 +577,14 @@ while running:
 
         # Enemy projectiles
         for b in enemy_bullets[:]:
-            b[1] += b[2]
+            if len(b) == 3:
+                b[1] += b[2]
+            else:
+                b[0] += b[2]
+                b[1] += b[3]
             pygame.draw.circle(screen, RED, (int(b[0]), int(b[1])), 6)
 
-            if b[1] > H:
+            if b[1] > H or b[0] < -15 or b[0] > W + 15:
                 enemy_bullets.remove(b)
             elif math.hypot(b[0] - px, b[1] - py) < 22:
                 enemy_bullets.remove(b)
@@ -537,7 +618,7 @@ while running:
         # HUD
         text("GALAXY DEFENDER", small, CYAN, 10, 10)
         text("SCORE " + str(score), font, WHITE, 10, 37)
-        text("LEVEL " + str(level), font, YELLOW, 10, 101)
+        text("STAGE " + str(level), font, YELLOW, 10, 101)
         text("LIVES " + str(lives), font, GREEN, 10, 129)
 
         draw_button(pause_button, "PAUSE", PURPLE)
