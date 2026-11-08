@@ -1,0 +1,119 @@
+name: Build Galaxy Defender Signed Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-signed-release:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git zip unzip autoconf libtool \
+            pkg-config zlib1g-dev libncurses5-dev \
+            libncursesw5-dev libtinfo5 cmake \
+            libffi-dev libssl-dev
+
+      - name: Install Buildozer and Cython
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install buildozer
+          python -m pip install "Cython==0.29.37"
+
+      - name: Check environment and local pygame recipe
+        run: |
+          python --version
+          cython --version
+          buildozer --version
+          java -version
+          test -f p4a-recipes/pygame/__init__.py
+          grep -n "2.6.1" p4a-recipes/pygame/__init__.py
+          grep -n "p4a.local_recipes" buildozer.spec
+
+      - name: Prepare persistent release signing key
+        shell: bash
+        env:
+          GALAXY_KEYSTORE_BASE64: ${{ secrets.GALAXY_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          test -n "$GALAXY_KEYSTORE_BASE64"
+          printf '%s' "$GALAXY_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/galaxy-defender-release.jks"
+          chmod 600 "$RUNNER_TEMP/galaxy-defender-release.jks"
+          test -s "$RUNNER_TEMP/galaxy-defender-release.jks"
+          keytool -list -keystore "$RUNNER_TEMP/galaxy-defender-release.jks" \
+            -alias "${{ secrets.GALAXY_KEY_ALIAS }}" \
+            -storepass "${{ secrets.GALAXY_KEYSTORE_PASSWORD }}"
+
+      - name: Build signed release APK
+        shell: bash
+        env:
+          P4A_RELEASE_KEYSTORE: ${{ runner.temp }}/galaxy-defender-release.jks
+          P4A_RELEASE_KEYSTORE_PASSWD: ${{ secrets.GALAXY_KEYSTORE_PASSWORD }}
+          P4A_RELEASE_KEYALIAS: ${{ secrets.GALAXY_KEY_ALIAS }}
+          P4A_RELEASE_KEYALIAS_PASSWD: ${{ secrets.GALAXY_KEY_PASSWORD }}
+          ANDROID_RELEASE_ARTIFACT: apk
+        run: |
+          set +e
+          yes | buildozer -v android release 2>&1 | tee build-release.log
+          result=${PIPESTATUS[1]}
+          echo "Release build exit code: $result"
+          exit "$result"
+
+      - name: Verify release APK signature and certificate
+        if: success()
+        shell: bash
+        env:
+          P4A_RELEASE_KEYSTORE: ${{ runner.temp }}/galaxy-defender-release.jks
+          P4A_RELEASE_KEYSTORE_PASSWD: ${{ secrets.GALAXY_KEYSTORE_PASSWORD }}
+          P4A_RELEASE_KEYALIAS: ${{ secrets.GALAXY_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          APK="$(find bin -maxdepth 1 -type f -name '*-release.apk' -print -quit)"
+          test -n "$APK"
+          APKSIGNER="$(find "$HOME/.buildozer/android/platform/android-sdk/build-tools" -type f -name apksigner -print | sort -V | tail -n 1)"
+          test -n "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs "$APK" | tee signature-verification.txt
+          EXPECTED_CERT="$(keytool -list -v -keystore "$P4A_RELEASE_KEYSTORE" -alias "$P4A_RELEASE_KEYALIAS" -storepass "$P4A_RELEASE_KEYSTORE_PASSWD" | awk '/SHA256:/{gsub(":", "", $2); print tolower($2); exit}')"
+          ACTUAL_CERT="$(awk -F': ' '/certificate SHA-256 digest:/{print tolower($2); exit}' signature-verification.txt)"
+          test -n "$EXPECTED_CERT"
+          test -n "$ACTUAL_CERT"
+          test "$EXPECTED_CERT" = "$ACTUAL_CERT"
+          echo "APK signature verified against the persistent Galaxy Defender certificate."
+
+      - name: Upload signed release APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Galaxy-Defender-Release-Signed
+          path: bin/*-release.apk
+          if-no-files-found: error
+
+      - name: Upload release build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Galaxy-Defender-Release-Logs
+          path: |
+            build-release.log
+            signature-verification.txt
+          if-no-files-found: ignore
