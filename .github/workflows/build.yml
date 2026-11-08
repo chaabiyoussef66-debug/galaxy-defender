@@ -49,11 +49,25 @@ jobs:
           buildozer --version
           java -version
 
-      - name: Verify local pygame recipe
+      - name: Verify local Android recipes
         run: |
           test -f p4a-recipes/pygame/__init__.py
           grep -n "2.6.1" p4a-recipes/pygame/__init__.py
+          test -f p4a-recipes/openssl/__init__.py
+          grep -n "mirrors.ibiblio.org/openssl/source" p4a-recipes/openssl/__init__.py
+          grep -n "cf3098950cb4d853ad95c0841f1f9c6d3dc102dccfcacd521d93925208b76ac8" p4a-recipes/openssl/__init__.py
           grep -n "p4a.local_recipes" buildozer.spec
+
+      - name: Preflight verified OpenSSL mirror
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/openssl-1.1.1w.tar.gz"
+          curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 \
+            "https://mirrors.ibiblio.org/openssl/source/openssl-1.1.1w.tar.gz" \
+            --output "$archive"
+          echo "cf3098950cb4d853ad95c0841f1f9c6d3dc102dccfcacd521d93925208b76ac8  $archive" | sha256sum --check
+          rm -f "$archive"
 
       - name: Build Android APK
         shell: bash
