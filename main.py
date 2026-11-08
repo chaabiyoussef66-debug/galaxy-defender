@@ -262,7 +262,7 @@ def explosion(x, y, color, amount=22):
 def reset_game():
     global px, py, bullets, enemies, drops, particles, enemy_bullets
     global score, lives, level, boss, spawn_timer, shot_timer
-    global shield_timer, weapon_timer, boss_done, shake
+    global shield_timer, weapon_timer, boss_done, shake, boss_warning_timer
 
     px, py = W / 2, H - 110
     bullets, enemies, drops, particles, enemy_bullets = [], [], [], [], []
@@ -271,6 +271,7 @@ def reset_game():
     spawn_timer = shot_timer = 0
     shield_timer = weapon_timer = 0
     boss_done = 0
+    boss_warning_timer = 0
     shake = 0
 
 MENU, SELECT_SHIP, PLAY, PAUSE, OVER, EXIT_CONFIRM = range(6)
@@ -452,6 +453,7 @@ while running:
         spawn_timer += dt
         shield_timer = max(0, shield_timer - dt)
         weapon_timer = max(0, weapon_timer - dt)
+        boss_warning_timer = max(0, boss_warning_timer - dt)
         shake = max(0, shake - dt)
 
         level = score // 100 + 1
@@ -464,6 +466,7 @@ while running:
                 "maxhp": 40 + level * 5,
                 "dir": 1, "fire": 0
             }
+            boss_warning_timer = 2200
             boss_done = level
             enemies.clear()
             play_sound(boss_sound)
@@ -559,7 +562,11 @@ while running:
 
         # Boss
         if boss is not None:
-            boss["x"] += boss["dir"] * (2 + level * 0.08)
+            boss_speed = (2 + level * 0.08)
+            # The boss becomes faster in its final half of health.
+            if boss["hp"] <= boss["maxhp"] * 0.5:
+                boss_speed *= 1.4
+            boss["x"] += boss["dir"] * boss_speed
 
             if boss["x"] > W - 75:
                 boss["dir"] = -1
@@ -567,7 +574,8 @@ while running:
                 boss["dir"] = 1
 
             boss["fire"] += dt
-            if boss["fire"] > 900:
+            fire_interval = 650 if boss["hp"] <= boss["maxhp"] * 0.5 else 900
+            if boss["fire"] > fire_interval:
                 for dx, speed in [(-30, 3.5), (0, 4), (30, 3.5)]:
                     enemy_bullets.append([
                         boss["x"] + dx, boss["y"] + 32, speed
@@ -648,6 +656,13 @@ while running:
         text("LIVES " + str(lives), font, GREEN, 10, 129)
 
         draw_button(pause_button, "PAUSE", PURPLE)
+
+        if boss_warning_timer > 0:
+            warning_box = pygame.Rect(35, 220, W - 70, 54)
+            pygame.draw.rect(screen, (45, 8, 20), warning_box, border_radius=12)
+            pygame.draw.rect(screen, RED, warning_box, 2, border_radius=12)
+            text("WARNING: BOSS APPROACHING!", font, YELLOW,
+                 W / 2, warning_box.centery, True)
 
         if shield_timer > 0:
             text("SHIELD", small, CYAN, 10, 157)
