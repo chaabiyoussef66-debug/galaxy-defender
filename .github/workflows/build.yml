@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - build-doctor
+      - galaxy-defender-2.4-fullscreen
 
 jobs:
   build:
