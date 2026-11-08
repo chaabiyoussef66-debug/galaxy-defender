@@ -207,8 +207,16 @@ def draw_button(rect, label, color=CYAN):
     pygame.draw.rect(screen, color, rect, 2, border_radius=12)
     text(label, font, WHITE, rect.centerx, rect.centery, True)
 
-def draw_ship(x, y, shield=False):
+SHIP_TYPES = [
+    {"name": "SCOUT", "role": "FAST", "color": CYAN, "speed": 0.30, "lives": 3, "fire": 230, "spread": False},
+    {"name": "GUARDIAN", "role": "ARMORED", "color": GREEN, "speed": 0.21, "lives": 4, "fire": 255, "spread": False},
+    {"name": "STRIKER", "role": "ATTACK", "color": ORANGE, "speed": 0.25, "lives": 3, "fire": 185, "spread": True},
+]
+selected_ship = 0
+
+def draw_ship(x, y, shield=False, ship_type=0):
     x, y = int(x), int(y)
+    ship_color = SHIP_TYPES[ship_type]["color"]
 
     # Engine glow
     pygame.draw.circle(screen, (30, 30, 100), (x, y + 10), 31)
@@ -216,17 +224,17 @@ def draw_ship(x, y, shield=False):
     pygame.draw.circle(screen, CYAN, (x, y + 23), 4)
 
     # Wings
-    pygame.draw.polygon(screen, BLUE, [
+    pygame.draw.polygon(screen, ship_color, [
         (x - 8, y + 2), (x - 34, y + 23),
         (x - 17, y + 21)
     ])
-    pygame.draw.polygon(screen, BLUE, [
+    pygame.draw.polygon(screen, ship_color, [
         (x + 8, y + 2), (x + 34, y + 23),
         (x + 17, y + 21)
     ])
 
     # Ship body
-    pygame.draw.polygon(screen, CYAN, [
+    pygame.draw.polygon(screen, ship_color, [
         (x, y - 31), (x - 19, y + 18),
         (x, y + 10), (x + 19, y + 18)
     ])
@@ -258,14 +266,14 @@ def reset_game():
 
     px, py = W / 2, H - 110
     bullets, enemies, drops, particles, enemy_bullets = [], [], [], [], []
-    score, lives, level = 0, 3, 1
+    score, lives, level = 0, SHIP_TYPES[selected_ship]["lives"], 1
     boss = None
     spawn_timer = shot_timer = 0
     shield_timer = weapon_timer = 0
     boss_done = 0
     shake = 0
 
-MENU, PLAY, PAUSE, OVER, EXIT_CONFIRM = range(5)
+MENU, SELECT_SHIP, PLAY, PAUSE, OVER, EXIT_CONFIRM = range(6)
 state = MENU
 touching = False
 touch_pos = (W / 2, H - 100)
@@ -276,6 +284,9 @@ resume_button = pygame.Rect(90, 355, 300, 55)
 menu_button = pygame.Rect(90, 425, 300, 55)
 exit_button = pygame.Rect(90, 390, 300, 58)
 cancel_exit_button = pygame.Rect(90, 465, 300, 55)
+ship_prev_button = pygame.Rect(35, 420, 115, 52)
+ship_next_button = pygame.Rect(W - 150, 420, 115, 52)
+ship_start_button = pygame.Rect(90, 510, 300, 58)
 
 reset_game()
 running = True
@@ -297,8 +308,18 @@ while running:
                 state = EXIT_CONFIRM
                 touching = False
 
+            if event.key in (pygame.K_LEFT, pygame.K_a) and state == SELECT_SHIP:
+                selected_ship = (selected_ship - 1) % len(SHIP_TYPES)
+            elif event.key in (pygame.K_RIGHT, pygame.K_d) and state == SELECT_SHIP:
+                selected_ship = (selected_ship + 1) % len(SHIP_TYPES)
+
             if event.key in (pygame.K_SPACE, pygame.K_RETURN):
-                if state in (MENU, OVER):
+                if state == MENU:
+                    state = SELECT_SHIP
+                elif state == SELECT_SHIP:
+                    reset_game()
+                    state = PLAY
+                elif state == OVER:
                     reset_game()
                     state = PLAY
                 elif state == PAUSE:
@@ -314,8 +335,16 @@ while running:
                 sound_on = not sound_on
 
             elif state == MENU and play_button.collidepoint(pos):
-                reset_game()
-                state = PLAY
+                state = SELECT_SHIP
+
+            elif state == SELECT_SHIP:
+                if ship_prev_button.collidepoint(pos):
+                    selected_ship = (selected_ship - 1) % len(SHIP_TYPES)
+                elif ship_next_button.collidepoint(pos):
+                    selected_ship = (selected_ship + 1) % len(SHIP_TYPES)
+                elif ship_start_button.collidepoint(pos):
+                    reset_game()
+                    state = PLAY
 
             elif state == PLAY:
                 if pause_button.collidepoint(pos):
@@ -358,8 +387,16 @@ while running:
                 sound_on = not sound_on
 
             elif state == MENU and play_button.collidepoint(pos):
-                reset_game()
-                state = PLAY
+                state = SELECT_SHIP
+
+            elif state == SELECT_SHIP:
+                if ship_prev_button.collidepoint(pos):
+                    selected_ship = (selected_ship - 1) % len(SHIP_TYPES)
+                elif ship_next_button.collidepoint(pos):
+                    selected_ship = (selected_ship + 1) % len(SHIP_TYPES)
+                elif ship_start_button.collidepoint(pos):
+                    reset_game()
+                    state = PLAY
 
             elif state == PLAY:
                 if pause_button.collidepoint(pos):
@@ -404,8 +441,9 @@ while running:
     if state == PLAY:
         if touching:
             tx, ty = touch_pos
-            px += (tx - px) * 0.24
-            py += (ty - py) * 0.24
+            move_speed = SHIP_TYPES[selected_ship]["speed"]
+            px += (tx - px) * move_speed
+            py += (ty - py) * move_speed
 
         px = max(35, min(W - 35, px))
         py = max(65, min(H - 45, py))
@@ -431,8 +469,10 @@ while running:
             play_sound(boss_sound)
 
         # Auto-fire
-        if shot_timer > (120 if weapon_timer > 0 else 230):
-            if weapon_timer > 0:
+        ship_data = SHIP_TYPES[selected_ship]
+        normal_fire_rate = ship_data["fire"]
+        if shot_timer > (120 if weapon_timer > 0 else normal_fire_rate):
+            if weapon_timer > 0 or ship_data["spread"]:
                 bullets.extend([
                     [px - 10, py - 24, -1.2],
                     [px, py - 30, 0],
@@ -599,7 +639,7 @@ while running:
             elif d[1] > H:
                 drops.remove(d)
 
-        draw_ship(px, py, shield_timer > 0)
+        draw_ship(px, py, shield_timer > 0, selected_ship)
 
         # HUD
         text("GALAXY DEFENDER", small, CYAN, 10, 10)
@@ -647,13 +687,27 @@ while running:
         text("GALAXY", big, CYAN, W / 2, 190, True)
         text("DEFENDER", big, PURPLE, W / 2, 245, True)
         draw_ship(W / 2, 310, True)
-        draw_button(play_button, "PLAY", CYAN)
+        draw_button(play_button, "CHOOSE SHIP", CYAN)
         text("BEST SCORE: " + str(best_score),
              font, YELLOW, W / 2, 460, True)
         text("TOUCH TO MOVE • AUTO LASER",
              small, WHITE, W / 2, 510, True)
         text("SOUND: M KEY OR BUTTON ABOVE",
              small, CYAN, W / 2, 540, True)
+
+    elif state == SELECT_SHIP:
+        ship_data = SHIP_TYPES[selected_ship]
+        text("SELECT YOUR SHIP", big, CYAN, W / 2, 205, True)
+        draw_ship(W / 2, 320, True, selected_ship)
+        text(ship_data["name"], big, ship_data["color"], W / 2, 375, True)
+        text(ship_data["role"], font, WHITE, W / 2, 405, True)
+        text("SPEED: " + str(int(ship_data["speed"] * 100)) +
+             "   LIVES: " + str(ship_data["lives"]), small, YELLOW, W / 2, 455, True)
+        text("WEAPON: " + ("TRIPLE SHOT" if ship_data["spread"] else "LASER"),
+             small, CYAN, W / 2, 480, True)
+        draw_button(ship_prev_button, "< PREVIOUS", PURPLE)
+        draw_button(ship_next_button, "NEXT >", PURPLE)
+        draw_button(ship_start_button, "START GAME", GREEN)
 
     elif state == PAUSE:
         text("PAUSED", big, CYAN, W / 2, 265, True)
