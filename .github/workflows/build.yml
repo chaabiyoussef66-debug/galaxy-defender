@@ -20,6 +20,34 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Set Buildozer Android SDK root
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk_root="$HOME/.buildozer/android/platform/android-sdk"
+          mkdir -p "$sdk_root"
+          echo "ANDROID_SDK_ROOT=$sdk_root" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$sdk_root" >> "$GITHUB_ENV"
+
+      - name: Set up Android SDK and accept licenses
+        uses: android-actions/setup-android@v4
+        with:
+          accept-android-sdk-licenses: true
+          packages: platform-tools build-tools;37.0.0
+
+      - name: Prepare Buildozer-compatible SDK manager
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk_root="$HOME/.buildozer/android/platform/android-sdk"
+          sdkmanager="$(find "$sdk_root/cmdline-tools" -type f -name sdkmanager -print | sort -V | tail -n 1)"
+          test -x "$sdkmanager"
+          mkdir -p "$sdk_root/tools/bin"
+          ln -sfn "$sdkmanager" "$sdk_root/tools/bin/sdkmanager"
+          test -x "$sdk_root/tools/bin/sdkmanager"
+          test -d "$sdk_root/build-tools/37.0.0"
+          echo "Android SDK licenses accepted; Build-Tools 37.0.0 and Buildozer sdkmanager path are ready."
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
