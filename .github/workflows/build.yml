@@ -105,15 +105,37 @@ jobs:
           version="8.0.2"
           distribution="gradle-${version}-all"
           wrapper_url="https://services.gradle.org/distributions/${distribution}.zip"
-          mirror_url="https://downloads.gradle.org/distributions/${distribution}.zip"
+          expected_sha256="47a5bfed9ef814f90f8debcbbb315e8e7c654109acd224595ea39fca95c5d4da"
           cache_root="${GRADLE_USER_HOME:-$HOME/.gradle}/wrapper/dists/${distribution}"
           url_hash="$(printf '%s' "$wrapper_url" | md5sum | cut -d' ' -f1)"
           cache_dir="$cache_root/$url_hash"
           mkdir -p "$cache_dir"
           archive="$cache_dir/${distribution}.zip"
-          echo "Downloading Gradle from the official downloads.gradle.org host..."
-          curl --fail --location --retry 5 --retry-all-errors --retry-delay 3 "$mirror_url" --output "$archive"
-          unzip -tq "$archive"
+          mirrors=(
+            "https://repo.huaweicloud.com/repository/toolkit/gradle/${distribution}.zip"
+            "https://mirrors.aliyun.com/gradle/distributions/v${version}/${distribution}.zip"
+            "https://mirror.nju.edu.cn/gradle/${distribution}.zip"
+          )
+          downloaded=0
+          for mirror in "${mirrors[@]}"; do
+            echo "Trying Gradle mirror: $mirror"
+            rm -f "$archive"
+            if curl --fail --location --connect-timeout 20 --max-time 900 --retry 2 --retry-all-errors --retry-delay 3 "$mirror" --output "$archive"; then
+              actual_sha256="$(sha256sum "$archive" | cut -d' ' -f1)"
+              if [[ "$actual_sha256" == "$expected_sha256" ]] && unzip -tq "$archive"; then
+                downloaded=1
+                echo "Gradle archive checksum and ZIP integrity verified."
+                break
+              fi
+              echo "Mirror returned an invalid archive or checksum; trying the next mirror."
+            else
+              echo "Mirror download failed; trying the next mirror."
+            fi
+          done
+          if [[ "$downloaded" -ne 1 ]]; then
+            echo "::error::Could not download a verified Gradle ${version} distribution from any configured mirror."
+            exit 1
+          fi
           unzip -q "$archive" -d "$cache_dir"
           test -x "$cache_dir/gradle-${version}/bin/gradle"
           touch "$cache_dir/${distribution}.zip.ok"
