@@ -263,6 +263,7 @@ def reset_game():
     global px, py, bullets, enemies, drops, particles, enemy_bullets
     global score, lives, level, boss, spawn_timer, shot_timer
     global shield_timer, weapon_timer, boss_done, shake, boss_warning_timer
+    global combo, combo_timer, bombs, bomb_flash
 
     px, py = W / 2, H - 110
     bullets, enemies, drops, particles, enemy_bullets = [], [], [], [], []
@@ -273,6 +274,7 @@ def reset_game():
     boss_done = 0
     boss_warning_timer = 0
     shake = 0
+    combo, combo_timer, bombs, bomb_flash = 0, 0, 2, 0
 
 MENU, SELECT_SHIP, PLAY, PAUSE, OVER, EXIT_CONFIRM = range(6)
 state = MENU
@@ -288,6 +290,7 @@ cancel_exit_button = pygame.Rect(90, 465, 300, 55)
 ship_prev_button = pygame.Rect(35, 420, 115, 52)
 ship_next_button = pygame.Rect(W - 150, 420, 115, 52)
 ship_start_button = pygame.Rect(90, 510, 300, 58)
+bomb_button = pygame.Rect(W - 118, 116, 108, 38)
 
 reset_game()
 running = True
@@ -351,6 +354,16 @@ while running:
                 if pause_button.collidepoint(pos):
                     state = PAUSE
                     touching = False
+                elif bomb_button.collidepoint(pos):
+                    if bombs > 0:
+                        bombs -= 1
+                        bomb_flash = 900
+                        enemies.clear()
+                        enemy_bullets.clear()
+                        if boss is not None:
+                            boss["hp"] -= 18
+                        explosion(px, py, YELLOW, 45)
+                        play_sound(power_sound)
                 else:
                     touching = True
                     touch_pos = pos
@@ -454,6 +467,10 @@ while running:
         shield_timer = max(0, shield_timer - dt)
         weapon_timer = max(0, weapon_timer - dt)
         boss_warning_timer = max(0, boss_warning_timer - dt)
+        combo_timer = max(0, combo_timer - dt)
+        bomb_flash = max(0, bomb_flash - dt)
+        if combo_timer == 0:
+            combo = 0
         shake = max(0, shake - dt)
 
         level = score // 100 + 1
@@ -505,55 +522,58 @@ while running:
 
         # Enemy spawning
         if boss is None and spawn_timer > max(300, 850 - level * 35):
-            enemies.append([
-                random.randint(25, W - 25), -25,
-                random.uniform(1.5, 2.8) + level * 0.15,
-                random.randint(14, 21)
-            ])
+            kind = random.choices(["scout", "armored", "shooter"], weights=[55, 25, 20], k=1)[0]
+            base = {"scout": (3.4, 13, 1), "armored": (1.25, 22, 3), "shooter": (2.0, 17, 1)}[kind]
+            enemies.append({"x": random.randint(25, W - 25), "y": -25,
+                "speed": base[0] + level * 0.10, "radius": base[1],
+                "kind": kind, "hp": base[2], "fire": random.randint(700, 1500)})
             spawn_timer = 0
 
         for e in enemies[:]:
-            e[1] += e[2]
-            ex, ey, speed, radius = e
+            e["y"] += e["speed"]
+            ex, ey, radius = e["x"], e["y"], e["radius"]
+            kind = e["kind"]
+            color = {"scout": CYAN, "armored": PURPLE, "shooter": ORANGE}[kind]
+            if kind == "armored":
+                pygame.draw.circle(screen, color, (int(ex), int(ey)), radius + 4, 3)
+                pygame.draw.rect(screen, color, (int(ex-radius), int(ey-radius), radius*2, radius*2), border_radius=5)
+            elif kind == "shooter":
+                pygame.draw.polygon(screen, ORANGE, [(int(ex), int(ey+radius)), (int(ex-radius), int(ey-radius)), (int(ex+radius), int(ey-radius))])
+                e["fire"] -= dt
+                if e["fire"] <= 0 and ey < H - 170:
+                    enemy_bullets.append([ex, ey + radius, 3.8 + level * 0.08])
+                    e["fire"] = random.randint(1500, 2300)
+            else:
+                pygame.draw.polygon(screen, CYAN, [(int(ex), int(ey+radius)), (int(ex-radius), int(ey-radius)), (int(ex), int(ey-radius//2)), (int(ex+radius), int(ey-radius))])
+            pygame.draw.circle(screen, WHITE, (int(ex), int(ey)), 3)
 
-            pygame.draw.polygon(screen, RED, [
-                (int(ex), int(ey + radius)),
-                (int(ex - radius), int(ey - radius)),
-                (int(ex), int(ey - radius // 2)),
-                (int(ex + radius), int(ey - radius))
-            ])
-            pygame.draw.circle(screen, ORANGE, (int(ex), int(ey)), 4)
-
-            hit = False
             for b in bullets[:]:
                 if math.hypot(ex - b[0], ey - b[1]) < radius + 9:
                     bullets.remove(b)
-                    hit = True
+                    e["hp"] -= 1
+                    if e["hp"] <= 0:
+                        enemies.remove(e)
+                        combo = min(5, combo + 1) if combo_timer > 0 else 1
+                        combo_timer = 2400
+                        score += 10 * combo
+                        explosion(ex, ey, color, 26 if kind == "armored" else 18)
+                        play_sound(hit_sound)
+                        if random.random() < 0.20:
+                            drops.append([ex, ey, random.choice(["shield", "weapon"])])
                     break
-
-            if hit:
-                enemies.remove(e)
-                score += 10
-                explosion(ex, ey, random.choice([ORANGE, CYAN, PURPLE]))
-                play_sound(hit_sound)
-
-                if random.random() < 0.20:
-                    drops.append([
-                        ex, ey,
-                        random.choice(["shield", "weapon"])
-                    ])
+            if e not in enemies:
                 continue
-
             if ey > H + 25:
                 enemies.remove(e)
                 lives -= 1
+                combo, combo_timer = 0, 0
                 shake = 150
                 continue
-
             if math.hypot(ex - px, ey - py) < radius + 18:
                 enemies.remove(e)
                 if shield_timer <= 0:
                     lives -= 1
+                    combo, combo_timer = 0, 0
                     shake = 220
                     explosion(px, py, RED)
                     play_sound(hit_sound)
@@ -610,6 +630,7 @@ while running:
                 explosion(bx, by, PURPLE, 55)
                 score += 100
                 lives = min(5, lives + 1)
+                bombs = min(4, bombs + 1)
                 boss = None
                 play_sound(power_sound)
 
@@ -656,7 +677,9 @@ while running:
         text("LIVES " + str(lives), font, GREEN, 10, 129)
 
         draw_button(pause_button, "PAUSE", PURPLE)
-
+        draw_button(bomb_button, "BOMB x" + str(bombs), YELLOW)
+        if combo > 1 and combo_timer > 0:
+            text("COMBO x" + str(combo), font, YELLOW, W / 2, 70, True)
         if boss_warning_timer > 0:
             warning_box = pygame.Rect(35, 220, W - 70, 54)
             pygame.draw.rect(screen, (45, 8, 20), warning_box, border_radius=12)
