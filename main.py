@@ -260,7 +260,7 @@ def explosion(x, y, color, amount=22):
 def reset_game():
     global px, py, bullets, enemies, drops, particles, enemy_bullets
     global score, lives, level, boss, spawn_timer, shot_timer
-    global shield_timer, weapon_timer, boss_done, shake
+    global shield_timer, weapon_timer, boss_done, shake, combo_count, combo_timer
 
     px, py = W / 2, H - 140
     bullets, enemies, drops, particles, enemy_bullets = [], [], [], [], []
@@ -268,6 +268,7 @@ def reset_game():
     boss = None
     spawn_timer = shot_timer = 0
     shield_timer = weapon_timer = 0
+    combo_count = combo_timer = 0
     boss_done = 0
     shake = 0
 
@@ -421,6 +422,9 @@ while running:
         spawn_timer += dt
         shield_timer = max(0, shield_timer - dt)
         weapon_timer = max(0, weapon_timer - dt)
+        combo_timer = max(0, combo_timer - dt)
+        if combo_timer == 0:
+            combo_count = 0
         shake = max(0, shake - dt)
 
         level = score // 100 + 1
@@ -497,7 +501,9 @@ while running:
 
             if hit:
                 enemies.remove(e)
-                score += 10
+                combo_count = min(5, combo_count + 1) if combo_timer > 0 else 1
+                combo_timer = 2200
+                score += 10 * combo_count
                 explosion(ex, ey, random.choice([ORANGE, CYAN, PURPLE]))
                 play_sound(hit_sound)
 
@@ -510,12 +516,14 @@ while running:
 
             if ey > H + 25:
                 enemies.remove(e)
+                combo_count = combo_timer = 0
                 lives -= 1
                 shake = 150
                 continue
 
             if math.hypot(ex - px, ey - py) < radius + 18:
                 enemies.remove(e)
+                combo_count = combo_timer = 0
                 if shield_timer <= 0:
                     lives -= 1
                     shake = 220
@@ -582,6 +590,7 @@ while running:
             elif math.hypot(b[0] - px, b[1] - py) < 22:
                 enemy_bullets.remove(b)
                 if shield_timer <= 0:
+                    combo_count = combo_timer = 0
                     lives -= 1
                     shake = 180
                     play_sound(hit_sound)
@@ -620,6 +629,8 @@ while running:
             text("SHIELD", small, CYAN, 10, 157)
         if weapon_timer > 0:
             text("POWER WEAPON", small, YELLOW, 10, 181)
+        if combo_count > 1:
+            text("COMBO x" + str(combo_count), font, ORANGE, 10, 207)
 
         # Shake flash
         if shake > 0:
