@@ -98,6 +98,27 @@ jobs:
           echo "Official SDL2_image archive downloaded and validated."
           rm -f "$archive"
 
+      - name: Prepare Gradle distribution cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="8.0.2"
+          distribution="gradle-${version}-all"
+          wrapper_url="https://services.gradle.org/distributions/${distribution}.zip"
+          mirror_url="https://downloads.gradle.org/distributions/${distribution}.zip"
+          cache_root="${GRADLE_USER_HOME:-$HOME/.gradle}/wrapper/dists/${distribution}"
+          url_hash="$(printf '%s' "$wrapper_url" | md5sum | cut -d' ' -f1)"
+          cache_dir="$cache_root/$url_hash"
+          mkdir -p "$cache_dir"
+          archive="$cache_dir/${distribution}.zip"
+          echo "Downloading Gradle from the official downloads.gradle.org host..."
+          curl --fail --location --retry 5 --retry-all-errors --retry-delay 3 "$mirror_url" --output "$archive"
+          unzip -tq "$archive"
+          unzip -q "$archive" -d "$cache_dir"
+          test -x "$cache_dir/gradle-${version}/bin/gradle"
+          touch "$cache_dir/${distribution}.zip.ok"
+          echo "Gradle ${version} cached for the Gradle wrapper."
+
       - name: Build Android APK
         shell: bash
         run: |
