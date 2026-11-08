@@ -1,8 +1,8 @@
 [app]
 
-title = Galaxy Defender 2.4 Portrait Test
+title = Galaxy Defender Portrait 2.4.2
 
-package.name = galaxydefender24test
+package.name = galaxydefenderportrait242
 
 package.domain = org.chaabi
 
