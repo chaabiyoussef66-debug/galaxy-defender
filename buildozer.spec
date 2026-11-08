@@ -1,6 +1,6 @@
 [app]
 
-title = Galaxy Defender 2.4 Test
+title = Galaxy Defender 2.4 Portrait Test
 
 package.name = galaxydefender24test
 
@@ -10,11 +10,11 @@ source.dir = .
 
 source.include_exts = py,txt,png,jpg,jpeg,wav,ogg,ttf
 
-version = 2.4.1
+version = 2.4.2
 
 requirements = python3,pygame
 
-orientation = landscape
+orientation = portrait
 
 fullscreen = 1
 
