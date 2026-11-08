@@ -54,6 +54,8 @@ jobs:
         shell: bash
         env:
           GALAXY_KEYSTORE_BASE64: ${{ secrets.GALAXY_KEYSTORE_BASE64 }}
+          GALAXY_KEY_ALIAS: ${{ secrets.GALAXY_KEY_ALIAS }}
+          GALAXY_KEYSTORE_PASSWORD: ${{ secrets.GALAXY_KEYSTORE_PASSWORD }}
         run: |
           set -euo pipefail
           test -n "$GALAXY_KEYSTORE_BASE64"
@@ -61,8 +63,8 @@ jobs:
           chmod 600 "$RUNNER_TEMP/galaxy-defender-release.jks"
           test -s "$RUNNER_TEMP/galaxy-defender-release.jks"
           keytool -list -keystore "$RUNNER_TEMP/galaxy-defender-release.jks" \
-            -alias "${{ secrets.GALAXY_KEY_ALIAS }}" \
-            -storepass "${{ secrets.GALAXY_KEYSTORE_PASSWORD }}"
+            -alias "$GALAXY_KEY_ALIAS" \
+            -storepass "$GALAXY_KEYSTORE_PASSWORD"
 
       - name: Build signed release APK
         shell: bash
