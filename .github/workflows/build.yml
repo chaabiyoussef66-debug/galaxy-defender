@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - build-doctor
+      - galaxy-defender-3.0
 
 jobs:
   build:
