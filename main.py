@@ -67,9 +67,16 @@ try:
 except Exception:
     AUDIO = False
 
-W, H = 480, 760
-screen = pygame.display.set_mode((W, H))
 pygame.display.set_caption("GALAXY DEFENDER ULTIMATE V2")
+display_info = pygame.display.Info()
+display_w = max(1, display_info.current_w or 854)
+display_h = max(1, display_info.current_h or 480)
+display_surface = pygame.display.set_mode((display_w, display_h), pygame.FULLSCREEN)
+# Render on a landscape canvas matching the device aspect ratio. This keeps
+# circles, fonts and sprites proportional while using the complete display.
+H = 480
+W = max(760, int(round(H * display_w / display_h)))
+screen = pygame.Surface((W, H)).convert()
 clock = pygame.time.Clock()
 
 BLACK = (3, 5, 22)
@@ -269,13 +276,14 @@ MENU, PLAY, PAUSE, OVER, EXIT_CONFIRM = range(5)
 state = MENU
 touching = False
 touch_pos = (W / 2, H - 100)
-sound_button = pygame.Rect(10, 72, 112, 34)
-pause_button = pygame.Rect(W - 100, 72, 88, 34)
-play_button = pygame.Rect(90, 365, 300, 60)
-resume_button = pygame.Rect(90, 355, 300, 55)
-menu_button = pygame.Rect(90, 425, 300, 55)
-exit_button = pygame.Rect(90, 390, 300, 58)
-cancel_exit_button = pygame.Rect(90, 465, 300, 55)
+button_x = W // 2 - 150
+sound_button = pygame.Rect(10, 12, 112, 34)
+pause_button = pygame.Rect(W - 100, 12, 88, 34)
+play_button = pygame.Rect(button_x, 270, 300, 60)
+resume_button = pygame.Rect(button_x, 225, 300, 55)
+menu_button = pygame.Rect(button_x, 295, 300, 55)
+exit_button = pygame.Rect(button_x, 255, 300, 58)
+cancel_exit_button = pygame.Rect(button_x, 325, 300, 55)
 
 reset_game()
 running = True
@@ -308,7 +316,7 @@ while running:
                 sound_on = not sound_on
 
         elif event.type == pygame.MOUSEBUTTONDOWN:
-            pos = event.pos
+            pos = (int(event.pos[0] * W / display_w), int(event.pos[1] * H / display_h))
 
             if sound_button.collidepoint(pos):
                 sound_on = not sound_on
@@ -346,7 +354,7 @@ while running:
 
         elif event.type == pygame.MOUSEMOTION:
             if touching:
-                touch_pos = event.pos
+                touch_pos = (int(event.pos[0] * W / display_w), int(event.pos[1] * H / display_h))
 
         elif event.type == pygame.MOUSEBUTTONUP:
             touching = False
@@ -644,26 +652,26 @@ while running:
 
     # Menus
     if state == MENU:
-        text("GALAXY", big, CYAN, W / 2, 190, True)
-        text("DEFENDER", big, PURPLE, W / 2, 245, True)
-        draw_ship(W / 2, 310, True)
+        text("GALAXY", big, CYAN, W / 2, 75, True)
+        text("DEFENDER", big, PURPLE, W / 2, 125, True)
+        draw_ship(W / 2, 195, True)
         draw_button(play_button, "PLAY", CYAN)
         text("BEST SCORE: " + str(best_score),
-             font, YELLOW, W / 2, 460, True)
+             font, YELLOW, W / 2, 355, True)
         text("TOUCH TO MOVE • AUTO LASER",
-             small, WHITE, W / 2, 510, True)
+             small, WHITE, W / 2, 395, True)
         text("SOUND: M KEY OR BUTTON ABOVE",
-             small, CYAN, W / 2, 540, True)
+             small, CYAN, W / 2, 425, True)
 
     elif state == PAUSE:
-        text("PAUSED", big, CYAN, W / 2, 265, True)
+        text("PAUSED", big, CYAN, W / 2, 165, True)
         draw_button(resume_button, "RESUME", GREEN)
         draw_button(menu_button, "MAIN MENU", PURPLE)
 
     elif state == OVER:
-        text("GAME OVER", big, RED, W / 2, 260, True)
-        text("SCORE: " + str(score), font, WHITE, W / 2, 320, True)
-        text("BEST: " + str(best_score), font, YELLOW, W / 2, 350, True)
+        text("GAME OVER", big, RED, W / 2, 115, True)
+        text("SCORE: " + str(score), font, WHITE, W / 2, 165, True)
+        text("BEST: " + str(best_score), font, YELLOW, W / 2, 195, True)
         draw_button(play_button, "PLAY AGAIN", CYAN)
         draw_button(menu_button, "MAIN MENU", PURPLE)
 
@@ -672,11 +680,13 @@ while running:
         overlay = pygame.Surface((W, H), pygame.SRCALPHA)
         overlay.fill((0, 0, 15, 205))
         screen.blit(overlay, (0, 0))
-        text("EXIT GAME?", big, YELLOW, W / 2, 300, True)
-        text("Do you want to close Galaxy Defender?", small, WHITE, W / 2, 345, True)
+        text("EXIT GAME?", big, YELLOW, W / 2, 185, True)
+        text("Do you want to close Galaxy Defender?", small, WHITE, W / 2, 225, True)
         draw_button(exit_button, "EXIT GAME", RED)
         draw_button(cancel_exit_button, "CANCEL", GREEN)
 
+    scaled_frame = pygame.transform.scale(screen, display_surface.get_size())
+    display_surface.blit(scaled_frame, (0, 0))
     pygame.display.flip()
 
 pygame.quit()
