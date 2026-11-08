@@ -275,7 +275,7 @@ jobs:
           printf '%s\n' "$verification"
 
           actual_fingerprint="$(printf '%s\n' "$verification" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print tolower($2); exit}')"
-          expected_fingerprint="d13c235508d80e989e3203c294cf787113c5ac6c1fe1ff97390e1bf2f3c339"
+          expected_fingerprint="d13c235508d80e989e393203c294cf787113c5ac6c1fe1ff97390e1bf2f3c339"
           if [[ "$actual_fingerprint" != "$expected_fingerprint" ]]; then
             echo "::error::APK certificate fingerprint does not match the Galaxy Defender 3.0 signing key."
             exit 1
