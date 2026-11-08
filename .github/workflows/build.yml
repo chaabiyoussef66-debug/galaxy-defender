@@ -55,6 +55,9 @@ jobs:
           grep -n "www.libsdl.org/projects/SDL_image/release" p4a-recipes/sdl2_image/__init__.py
           test -f p4a-recipes/sdl2/__init__.py
           grep -n "www.libsdl.org/release/SDL2-" p4a-recipes/sdl2/__init__.py
+          test -f p4a-recipes/sdl2_ttf/__init__.py
+          grep -n "SDL2_ttf-{version}.tar.gz" p4a-recipes/sdl2_ttf/__init__.py
+          grep -n "b54e93b100712e3764cd80d4e4b16cd4c2a6853620f675941a4214320b0ee29a583d57ad56cd5fdb5c7a32d7615cbf43bc3fa55337b01623cee7219ebb43667c" p4a-recipes/sdl2_ttf/__init__.py
           grep -n "cf3098950cb4d853ad95c0841f1f9c6d3dc102dccfcacd521d93925208b76ac8" p4a-recipes/openssl/__init__.py
           grep -n "p4a.local_recipes" buildozer.spec
 
@@ -97,6 +100,40 @@ jobs:
           tar -tzf "$archive" >/dev/null
           echo "Official SDL2_image archive downloaded and validated."
           rm -f "$archive"
+
+      - name: Verify official SDL2_ttf signature and SHA-512
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="2.20.2"
+          filename="SDL2_ttf-${version}.tar.gz"
+          base_url="https://www.libsdl.org/projects/SDL_ttf/release"
+          archive="$RUNNER_TEMP/$filename"
+          signature="$RUNNER_TEMP/$filename.sig"
+          status_file="$RUNNER_TEMP/sdl2_ttf-gpg-status.txt"
+          expected_fingerprint="0900104363B4C9D4223DE149D913FE7D4B61D39B"
+          expected_sha512="b54e93b100712e3764cd80d4e4b16cd4c2a6853620f675941a4214320b0ee29a583d57ad56cd5fdb5c7a32d7615cbf43bc3fa55337b01623cee7219ebb43667c"
+
+          sudo apt-get install -y gnupg
+          curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 "$base_url/$filename" --output "$archive"
+          curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 "$base_url/$filename.sig" --output "$signature"
+
+          gpg --batch --keyserver hkps://keyserver.ubuntu.com --keyserver-options timeout=30,retry=3 --recv-keys "$expected_fingerprint"
+          actual_fingerprint="$(gpg --batch --with-colons --fingerprint "$expected_fingerprint" | awk -F: '$1 == "fpr" { print $10; exit }')"
+          test "$actual_fingerprint" = "$expected_fingerprint"
+
+          if ! gpg --batch --status-fd 1 --verify "$signature" "$archive" >"$status_file" 2>&1; then
+            cat "$status_file"
+            echo "::error::SDL2_ttf detached signature verification failed."
+            exit 1
+          fi
+          cat "$status_file"
+          verified_primary="$(awk '$2 == "VALIDSIG" { print (NF >= 12 ? $12 : $3) }' "$status_file")"
+          test "$verified_primary" = "$expected_fingerprint"
+
+          echo "$expected_sha512  $archive" | sha512sum --check
+          tar -tzf "$archive" >/dev/null
+          echo "SDL2_ttf $version: official signature, pinned key fingerprint, SHA-512, and archive structure verified."
 
       - name: Prepare Gradle distribution cache
         shell: bash
