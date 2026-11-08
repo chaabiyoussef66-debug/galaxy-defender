@@ -71,11 +71,10 @@ pygame.display.set_caption("GALAXY DEFENDER ULTIMATE V2")
 display_info = pygame.display.Info()
 display_w = max(1, display_info.current_w or 854)
 display_h = max(1, display_info.current_h or 480)
+# Portrait-first test build: use the complete display and a matching logical canvas.
 display_surface = pygame.display.set_mode((display_w, display_h), pygame.FULLSCREEN)
-# Render on a landscape canvas matching the device aspect ratio. This keeps
-# circles, fonts and sprites proportional while using the complete display.
-H = 480
-W = max(760, int(round(H * display_w / display_h)))
+W = 480
+H = max(760, int(round(W * display_h / display_w)))
 screen = pygame.Surface((W, H)).convert()
 clock = pygame.time.Clock()
 
@@ -263,7 +262,7 @@ def reset_game():
     global score, lives, level, boss, spawn_timer, shot_timer
     global shield_timer, weapon_timer, boss_done, shake
 
-    px, py = W / 2, H - 110
+    px, py = W / 2, H - 140
     bullets, enemies, drops, particles, enemy_bullets = [], [], [], [], []
     score, lives, level = 0, 3, 1
     boss = None
@@ -277,13 +276,13 @@ state = MENU
 touching = False
 touch_pos = (W / 2, H - 100)
 button_x = W // 2 - 150
-sound_button = pygame.Rect(W - 230, 12, 112, 34)
+sound_button = pygame.Rect(12, 12, 112, 34)
 pause_button = pygame.Rect(W - 100, 12, 88, 34)
-play_button = pygame.Rect(button_x, 270, 300, 60)
-resume_button = pygame.Rect(button_x, 225, 300, 55)
-menu_button = pygame.Rect(button_x, 295, 300, 55)
-exit_button = pygame.Rect(button_x, 255, 300, 58)
-cancel_exit_button = pygame.Rect(button_x, 325, 300, 55)
+play_button = pygame.Rect(button_x, 500, 300, 60)
+resume_button = pygame.Rect(button_x, 385, 300, 55)
+menu_button = pygame.Rect(button_x, 465, 300, 55)
+exit_button = pygame.Rect(button_x, 420, 300, 58)
+cancel_exit_button = pygame.Rect(button_x, 500, 300, 55)
 
 reset_game()
 running = True
@@ -429,7 +428,7 @@ while running:
         # Boss every five levels
         if level % 5 == 0 and boss is None and boss_done < level:
             boss = {
-                "x": W / 2, "y": 155,
+                "x": W / 2, "y": 245,
                 "hp": 40 + level * 5,
                 "maxhp": 40 + level * 5,
                 "dir": 1, "fire": 0
@@ -562,9 +561,9 @@ while running:
 
             # Boss health
             bw = 230
-            pygame.draw.rect(screen, RED, (W // 2 - 115, 130, bw, 10))
+            pygame.draw.rect(screen, RED, (W // 2 - 115, 190, bw, 10))
             hpw = max(0, int(bw * boss["hp"] / boss["maxhp"]))
-            pygame.draw.rect(screen, GREEN, (W // 2 - 115, 130, hpw, 10))
+            pygame.draw.rect(screen, GREEN, (W // 2 - 115, 190, hpw, 10))
 
             if boss["hp"] <= 0:
                 explosion(bx, by, PURPLE, 55)
@@ -652,26 +651,26 @@ while running:
 
     # Menus
     if state == MENU:
-        text("GALAXY", big, CYAN, W / 2, 75, True)
-        text("DEFENDER", big, PURPLE, W / 2, 125, True)
-        draw_ship(W / 2, 195, True)
+        text("GALAXY", big, CYAN, W / 2, 210, True)
+        text("DEFENDER", big, PURPLE, W / 2, 270, True)
+        draw_ship(W / 2, 385, True)
         draw_button(play_button, "PLAY", CYAN)
         text("BEST SCORE: " + str(best_score),
-             font, YELLOW, W / 2, 355, True)
+             font, YELLOW, W / 2, 610, True)
         text("TOUCH TO MOVE • AUTO LASER",
-             small, WHITE, W / 2, 395, True)
-        text("SOUND: M KEY OR BUTTON ABOVE",
-             small, CYAN, W / 2, 425, True)
+             small, WHITE, W / 2, 665, True)
+        text("SOUND: BUTTON ABOVE",
+             small, CYAN, W / 2, 700, True)
 
     elif state == PAUSE:
-        text("PAUSED", big, CYAN, W / 2, 165, True)
+        text("PAUSED", big, CYAN, W / 2, 315, True)
         draw_button(resume_button, "RESUME", GREEN)
         draw_button(menu_button, "MAIN MENU", PURPLE)
 
     elif state == OVER:
-        text("GAME OVER", big, RED, W / 2, 115, True)
-        text("SCORE: " + str(score), font, WHITE, W / 2, 165, True)
-        text("BEST: " + str(best_score), font, YELLOW, W / 2, 195, True)
+        text("GAME OVER", big, RED, W / 2, 310, True)
+        text("SCORE: " + str(score), font, WHITE, W / 2, 365, True)
+        text("BEST: " + str(best_score), font, YELLOW, W / 2, 405, True)
         draw_button(play_button, "PLAY AGAIN", CYAN)
         draw_button(menu_button, "MAIN MENU", PURPLE)
 
@@ -680,8 +679,8 @@ while running:
         overlay = pygame.Surface((W, H), pygame.SRCALPHA)
         overlay.fill((0, 0, 15, 205))
         screen.blit(overlay, (0, 0))
-        text("EXIT GAME?", big, YELLOW, W / 2, 185, True)
-        text("Do you want to close Galaxy Defender?", small, WHITE, W / 2, 225, True)
+        text("EXIT GAME?", big, YELLOW, W / 2, 335, True)
+        text("Do you want to close Galaxy Defender?", small, WHITE, W / 2, 380, True)
         draw_button(exit_button, "EXIT GAME", RED)
         draw_button(cancel_exit_button, "CANCEL", GREEN)
 
