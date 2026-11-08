@@ -416,6 +416,16 @@ while running:
                 if pause_button.collidepoint(pos):
                     state = PAUSE
                     touching = False
+                elif bomb_button.collidepoint(pos):
+                    if bombs > 0:
+                        bombs -= 1
+                        bomb_flash = 900
+                        enemies.clear()
+                        enemy_bullets.clear()
+                        if boss is not None:
+                            boss["hp"] -= 18
+                        explosion(px, py, YELLOW, 45)
+                        play_sound(power_sound)
                 else:
                     touching = True
                     touch_pos = pos
