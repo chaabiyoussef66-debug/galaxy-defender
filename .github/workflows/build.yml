@@ -118,9 +118,39 @@ jobs:
           curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 "$base_url/$filename" --output "$archive"
           curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 "$base_url/$filename.sig" --output "$signature"
 
-          gpg --batch --keyserver hkps://keyserver.ubuntu.com --keyserver-options timeout=30,retry=3 --recv-keys "$expected_fingerprint"
+          # Import the complete public key block published by SDL itself.
+          # Keyserver responses previously supplied the primary key without
+          # the signing subkey used by the 2023 release signature.
+          python - "$RUNNER_TEMP/sdl-signing-keys.asc" <<'PY'
+          from html.parser import HTMLParser
+          from html import unescape
+          import re
+          import sys
+          import urllib.request
+
+          url = "https://libsdl.org/signing-keys.php"
+          with urllib.request.urlopen(url, timeout=30) as response:
+              page = response.read().decode("utf-8")
+          class Text(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.parts = []
+              def handle_data(self, data):
+                  self.parts.append(data)
+          parser = Text()
+          parser.feed(page)
+          text = unescape("\n".join(parser.parts))
+          match = re.search(r"-----BEGIN PGP PUBLIC KEY BLOCK-----.*?-----END PGP PUBLIC KEY BLOCK-----", text, re.S)
+          if not match:
+              raise SystemExit("Could not extract SDL's published OpenPGP key block")
+          with open(sys.argv[1], "w", encoding="ascii") as output:
+              output.write(match.group(0) + "\n")
+          PY
+          gpg --batch --import "$RUNNER_TEMP/sdl-signing-keys.asc"
           actual_fingerprint="$(gpg --batch --with-colons --fingerprint "$expected_fingerprint" | awk -F: '$1 == "fpr" { print $10; exit }')"
           test "$actual_fingerprint" = "$expected_fingerprint"
+          signing_subkey="$(gpg --batch --with-colons --list-keys "$expected_fingerprint" | awk -F: '$1 == "sub" { found=1 } $1 == "fpr" && found { print $10; exit }')"
+          test "$signing_subkey" = "1528635D8053A57F77D1E08630A59377A7763BE6"
 
           if ! gpg --batch --status-fd 1 --verify "$signature" "$archive" >"$status_file" 2>&1; then
             cat "$status_file"
