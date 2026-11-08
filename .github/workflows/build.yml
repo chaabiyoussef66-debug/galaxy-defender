@@ -65,6 +65,16 @@ jobs:
           echo "cf3098950cb4d853ad95c0841f1f9c6d3dc102dccfcacd521d93925208b76ac8  $archive" | sha256sum --check
           rm -f "$archive"
 
+      - name: Preflight official SDL2_mixer source
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/SDL2_mixer-2.6.3.tar.gz"
+          curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 "https://www.libsdl.org/projects/SDL_mixer/release/SDL2_mixer-2.6.3.tar.gz" --output "$archive"
+          tar -tzf "$archive" >/dev/null
+          echo "Official SDL2_mixer archive downloaded and validated."
+          rm -f "$archive"
+
       - name: Preflight official SDL2_image source
         shell: bash
         run: |
