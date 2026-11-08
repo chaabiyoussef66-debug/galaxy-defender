@@ -8,7 +8,7 @@ from pythonforandroid.recipes.openssl import OpenSSLRecipe
 
 
 class OpenSSL111wMirrorRecipe(OpenSSLRecipe):
-    url = "https://mirrors.ibiblio.org/openssl/source/openssl-{url_version}.tar.gz"
+    url = "https://mirror.math.princeton.edu/pub/openssl/source/openssl-{url_version}.tar.gz"
     sha256sum = "cf3098950cb4d853ad95c0841f1f9c6d3dc102dccfcacd521d93925208b76ac8"
 
 
