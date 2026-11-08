@@ -4,8 +4,6 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - main
-      - build-doctor
       - galaxy-defender-3.0
 
 jobs:
@@ -226,14 +224,70 @@ jobs:
           touch "$cache_dir/${distribution}.zip.ok"
           echo "Gradle ${version} cached for the Gradle wrapper."
 
-      - name: Build Android APK
+      - name: Build signed Release APK
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$ANDROID_KEYSTORE_BASE64"
+          test -n "$ANDROID_KEYSTORE_PASSWORD"
+          test -n "$ANDROID_KEY_ALIAS"
+          test -n "$ANDROID_KEY_PASSWORD"
+
+          signing_dir="$RUNNER_TEMP/galaxy-defender-signing"
+          mkdir -p "$signing_dir"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$signing_dir/galaxy-defender-30.jks"
+          chmod 600 "$signing_dir/galaxy-defender-30.jks"
+
+          export P4A_RELEASE_KEYSTORE="$signing_dir/galaxy-defender-30.jks"
+          export P4A_RELEASE_KEYALIAS="$ANDROID_KEY_ALIAS"
+          export P4A_RELEASE_KEYSTORE_PASSWD="$ANDROID_KEYSTORE_PASSWORD"
+          export P4A_RELEASE_KEYALIAS_PASSWD="$ANDROID_KEY_PASSWORD"
+          export APP_ANDROID_RELEASE_ARTIFACT=apk
+
+          buildozer -v android release 2>&1 | tee build.log
+
+      - name: Verify APK signature and certificate fingerprint
+        if: success()
         shell: bash
         run: |
-          set +e
-          yes | buildozer -v android debug 2>&1 | tee build.log
-          result=${PIPESTATUS[1]}
-          echo "Build exit code: $result"
-          exit "$result"
+          set -euo pipefail
+          mapfile -t apks < <(find bin -maxdepth 1 -type f -name '*-release.apk' -print | sort)
+          if [[ "${#apks[@]}" -ne 1 ]]; then
+            echo "::error::Expected exactly one release APK; found ${#apks[@]}."
+            printf '%s\n' "${apks[@]}"
+            exit 1
+          fi
+
+          sdk_root="$HOME/.buildozer/android/platform/android-sdk"
+          apksigner="$(find "$sdk_root/build-tools" -type f -name apksigner -print | sort -V | tail -n 1)"
+          test -x "$apksigner"
+
+          verification="$("$apksigner" verify --verbose --print-certs "${apks[0]}" 2>&1)" || {
+            printf '%s\n' "$verification"
+            echo "::error::APK signature verification failed."
+            exit 1
+          }
+          printf '%s\n' "$verification"
+
+          actual_fingerprint="$(printf '%s\n' "$verification" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/ {print tolower($2); exit}')"
+          expected_fingerprint="d13c235508d80e989e3203c294cf787113c5ac6c1fe1ff97390e1bf2f3c339"
+          if [[ "$actual_fingerprint" != "$expected_fingerprint" ]]; then
+            echo "::error::APK certificate fingerprint does not match the Galaxy Defender 3.0 signing key."
+            exit 1
+          fi
+
+          cp "${apks[0]}" bin/Galaxy-Defender-3.0-release-signed.apk
+          echo "APK signature is valid and the signing certificate fingerprint matches."
+
+      - name: Diagnose failed build
+        if: failure()
+        run: |
+          python tools/build_doctor.py build.log
 
       - name: Diagnose failed build
         if: failure()
@@ -248,12 +302,12 @@ jobs:
           path: doctor-report.md
           if-no-files-found: ignore
 
-      - name: Upload APK
+      - name: Upload signed Release APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: Galaxy-Defender-APK
-          path: bin/*.apk
+          name: Galaxy-Defender-3.0-release-signed
+          path: bin/Galaxy-Defender-3.0-release-signed.apk
           if-no-files-found: error
 
       - name: Upload build log
