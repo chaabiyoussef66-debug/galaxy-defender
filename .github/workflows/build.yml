@@ -30,10 +30,10 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            git zip unzip autoconf libtool \
-            pkg-config zlib1g-dev libncurses5-dev \
-            libncursesw5-dev libtinfo5 cmake \
+          sudo apt-get install -y \\
+            git zip unzip autoconf libtool \\
+            pkg-config zlib1g-dev libncurses5-dev \\
+            libncursesw5-dev libtinfo5 cmake \\
             libffi-dev libssl-dev
 
       - name: Install Buildozer and Cython
@@ -54,7 +54,7 @@ jobs:
           test -f p4a-recipes/pygame/__init__.py
           grep -n "2.6.1" p4a-recipes/pygame/__init__.py
           test -f p4a-recipes/openssl/__init__.py
-          grep -n "mirrors.ibiblio.org/openssl/source" p4a-recipes/openssl/__init__.py
+          grep -n "mirror.math.princeton.edu/pub/openssl/source" p4a-recipes/openssl/__init__.py
           grep -n "cf3098950cb4d853ad95c0841f1f9c6d3dc102dccfcacd521d93925208b76ac8" p4a-recipes/openssl/__init__.py
           grep -n "p4a.local_recipes" buildozer.spec
 
@@ -63,8 +63,8 @@ jobs:
         run: |
           set -euo pipefail
           archive="$RUNNER_TEMP/openssl-1.1.1w.tar.gz"
-          curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 \
-            "https://mirrors.ibiblio.org/openssl/source/openssl-1.1.1w.tar.gz" \
+          curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 \\
+            "https://mirror.math.princeton.edu/pub/openssl/source/openssl-1.1.1w.tar.gz" \\
             --output "$archive"
           echo "cf3098950cb4d853ad95c0841f1f9c6d3dc102dccfcacd521d93925208b76ac8  $archive" | sha256sum --check
           rm -f "$archive"
