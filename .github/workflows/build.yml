@@ -53,6 +53,8 @@ jobs:
           grep -n "mirror.math.princeton.edu/pub/openssl/source" p4a-recipes/openssl/__init__.py
           test -f p4a-recipes/sdl2_image/__init__.py
           grep -n "www.libsdl.org/projects/SDL_image/release" p4a-recipes/sdl2_image/__init__.py
+          test -f p4a-recipes/sdl2/__init__.py
+          grep -n "www.libsdl.org/release/SDL2-" p4a-recipes/sdl2/__init__.py
           grep -n "cf3098950cb4d853ad95c0841f1f9c6d3dc102dccfcacd521d93925208b76ac8" p4a-recipes/openssl/__init__.py
           grep -n "p4a.local_recipes" buildozer.spec
 
@@ -63,6 +65,17 @@ jobs:
           archive="$RUNNER_TEMP/openssl-1.1.1w.tar.gz"
           curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 "https://mirror.math.princeton.edu/pub/openssl/source/openssl-1.1.1w.tar.gz" --output "$archive"
           echo "cf3098950cb4d853ad95c0841f1f9c6d3dc102dccfcacd521d93925208b76ac8  $archive" | sha256sum --check
+          rm -f "$archive"
+
+      - name: Preflight official SDL2 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/SDL2-2.28.5.tar.gz"
+          curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 "https://www.libsdl.org/release/SDL2-2.28.5.tar.gz" --output "$archive"
+          echo "a344eb827a03045c9b399e99af4af13d  $archive" | md5sum --check
+          tar -tzf "$archive" >/dev/null
+          echo "Official SDL2 archive downloaded, checksum-verified, and validated."
           rm -f "$archive"
 
       - name: Preflight official SDL2_mixer source
