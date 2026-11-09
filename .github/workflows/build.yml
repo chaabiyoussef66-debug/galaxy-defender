@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - galaxy-defender-3.0
+      - galaxy-defender-3.1
 
 jobs:
   build:
@@ -379,11 +380,11 @@ jobs:
           actual_fingerprint="$(printf '%s\n' "$verification" | awk -F': ' '/certificate SHA-256 digest:/ {print tolower($NF); exit}')"
           expected_fingerprint="d13c235508d80e989e393203c294cf787113c5ac6c1fe1ff97390e1bf2f3c339"
           if [[ "$actual_fingerprint" != "$expected_fingerprint" ]]; then
-            echo "::error::APK certificate fingerprint does not match the Galaxy Defender 3.0 signing key."
+            echo "::error::APK certificate fingerprint does not match the configured Galaxy Defender signing key."
             exit 1
           fi
 
-          cp "${apks[0]}" bin/Galaxy-Defender-3.0-release-signed.apk
+          cp "${apks[0]}" bin/Galaxy-Defender-3.1-release-signed.apk
           echo "APK signature is valid and the signing certificate fingerprint matches."
 
       - name: Diagnose failed build
@@ -407,7 +408,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: Galaxy-Defender-3.0-release-signed
+          name: Galaxy-Defender-3.1-release-signed
           path: bin/Galaxy-Defender-3.0-release-signed.apk
           if-no-files-found: error
 
