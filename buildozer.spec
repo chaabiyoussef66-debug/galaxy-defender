@@ -1,9 +1,9 @@
 
 [app]
 
-title = Galaxy Defender 3.0
+title = Galaxy Defender 3.1
 
-package.name = galaxydefender30
+package.name = galaxydefender31
 
 package.domain = org.chaabi
 
@@ -11,7 +11,7 @@ source.dir = .
 
 source.include_exts = py,txt,png,jpg,jpeg,wav,ogg,ttf
 
-version = 3.0
+version = 3.1
 
 requirements = python3,pygame
 
