@@ -155,10 +155,37 @@ def make_tone(start_freq, duration, volume=0.25, slide=0):
     except (pygame.error, ValueError):
         return None
 
-laser_sound = make_tone(1000, 0.07, 0.16, -450)
-hit_sound = make_tone(350, 0.16, 0.25, -220)
-power_sound = make_tone(450, 0.35, 0.22, 1400)
-boss_sound = make_tone(180, 0.45, 0.25, -100)
+def make_combat_sound(duration, volume, low_freq, noise_mix=0.65, decay=5.0):
+    """Layer filtered-style noise and a falling oscillator for punchy sci-fi combat SFX."""
+    if not AUDIO:
+        return None
+    try:
+        rate = 22050
+        count = int(rate * duration)
+        samples = array.array("h")
+        phase = 0.0
+        for i in range(count):
+            t = i / rate
+            progress = i / max(1, count)
+            envelope = math.exp(-decay * progress)
+            freq = low_freq * (1.0 - 0.72 * progress)
+            phase += 2.0 * math.pi * freq / rate
+            noise = random.uniform(-1.0, 1.0)
+            tone = math.sin(phase) * (1.0 - noise_mix)
+            transient = noise * noise_mix
+            value = int(32767 * volume * envelope * (tone + transient) * 0.72)
+            samples.append(max(-32768, min(32767, value)))
+        return pygame.mixer.Sound(buffer=samples.tobytes())
+    except (pygame.error, ValueError):
+        return None
+
+# Punchy layered effects: a sharp weapon crack, a deep explosive boom,
+# a metallic impact, and a rising sci-fi energy charge.
+laser_sound = make_combat_sound(0.105, 0.30, 1250, 0.48, 8.0)
+explosion_sound = make_combat_sound(0.62, 0.42, 105, 0.88, 3.2)
+hit_sound = make_combat_sound(0.19, 0.30, 260, 0.72, 7.0)
+power_sound = make_tone(260, 0.42, 0.25, 1800)
+boss_sound = make_combat_sound(0.78, 0.34, 72, 0.76, 2.6)
 gameover_sound = make_tone(450, 0.6, 0.2, -350)
 
 sound_on = True
@@ -274,48 +301,94 @@ def draw_ship(x, y, shield=False, ship_type=0):
         pygame.draw.circle(screen, BLUE, (x, y), 42, 1)
 
 def draw_octopus_boss(bx, by, phase):
-    """Draw the final boss as a living alien octopus with animated tentacles."""
+    """Render a living deep-space cephalopod with eight muscular, independently moving arms."""
     tick = pygame.time.get_ticks() / 1000.0
-    tentacle_color = (145, 35, 205)
-    edge_color = (255, 70, 125)
+    skin = (92, 24, 126)
+    skin_light = (174, 58, 178)
+    rim = (255, 86, 150)
+    sucker = (255, 176, 205)
 
-    # Eight independently waving tentacles, four on each side.
+    # Dark aura makes the creature feel huge against the star field.
+    pygame.draw.ellipse(screen, (24, 5, 48), (bx - 116, by - 75, 232, 220))
+
+    # Eight arms: each is a tapered, segmented curve with two rows of suckers.
     tips = []
     for i in range(8):
         side = -1 if i < 4 else 1
         row = i if i < 4 else i - 4
-        start_x = bx + side * (17 + row * 8)
-        start_y = by + 18 + row * 3
-        reach = 72 + row * 18
-        wave = math.sin(tick * (2.2 + row * 0.25) + i * 0.9) * (10 + phase * 3)
+        root_x = bx + side * (25 + row * 5)
+        root_y = by + 23 + row * 5
+        reach = 92 + row * 17
+        wave = math.sin(tick * (1.65 + row * 0.19) + i * 1.13) * (15 + phase * 4)
+        curl = math.sin(tick * 1.1 + i * 0.8) * 15
         tip_x = bx + side * (reach + wave)
-        tip_y = by + 52 + row * 13 + math.cos(tick * 1.7 + i) * 9
+        tip_y = by + 86 + row * 17 + math.cos(tick * 1.45 + i * 0.92) * 13
         points = []
-        for step in range(7):
-            t = step / 6
-            curve_x = start_x + (tip_x - start_x) * t
-            curve_y = start_y + (tip_y - start_y) * t + math.sin(t * math.pi + tick * 2 + i) * 13 * t
-            points.append((int(curve_x), int(curve_y)))
-        pygame.draw.lines(screen, tentacle_color, False, points, 13 - row)
-        pygame.draw.lines(screen, edge_color, False, points, 3)
-        for suction in range(1, 6):
-            t = suction / 6
-            sx = int(start_x + (tip_x - start_x) * t)
-            sy = int(start_y + (tip_y - start_y) * t + math.sin(t * math.pi + tick * 2 + i) * 13 * t)
-            pygame.draw.circle(screen, (255, 155, 190), (sx, sy), 3)
+        for step in range(13):
+            t = step / 12.0
+            bend = math.sin(t * math.pi + tick * 1.5 + i * 0.73) * (18 + phase * 2) * t
+            px_arm = root_x + (tip_x - root_x) * t + side * curl * t * t
+            py_arm = root_y + (tip_y - root_y) * t + bend
+            points.append((int(px_arm), int(py_arm)))
+
+        # Draw the arm as overlapping muscle segments so it tapers naturally.
+        for j in range(len(points) - 1):
+            t = j / (len(points) - 1)
+            width = max(3, int((15 - row * 1.2) * (1.0 - 0.72 * t)))
+            pygame.draw.line(screen, skin, points[j], points[j + 1], width + 4)
+            pygame.draw.line(screen, skin_light, points[j], points[j + 1], width)
+        pygame.draw.circle(screen, skin_light, points[0], max(5, 8 - row // 2))
+        pygame.draw.circle(screen, rim, points[-1], 4)
+
+        # Paired suction cups follow the moving arm, not a straight line.
+        for j in range(2, 11):
+            x, y = points[j]
+            tangent_x = points[min(12, j + 1)][0] - points[max(0, j - 1)][0]
+            tangent_y = points[min(12, j + 1)][1] - points[max(0, j - 1)][1]
+            length = max(1.0, math.hypot(tangent_x, tangent_y))
+            nx, ny = -tangent_y / length, tangent_x / length
+            cup_r = max(2, int(4 - row * 0.35))
+            for side_offset in (-1, 1):
+                cx = int(x + nx * cup_r * side_offset * 1.35)
+                cy = int(y + ny * cup_r * side_offset * 1.35)
+                pygame.draw.circle(screen, (64, 10, 86), (cx, cy), cup_r + 1)
+                pygame.draw.circle(screen, sucker, (cx, cy), max(1, cup_r - 1))
+                pygame.draw.circle(screen, (255, 225, 235), (cx, cy), 1)
         tips.append((tip_x, tip_y))
 
-    # Armored alien head, glowing eyes and a tooth-filled mouth.
-    pygame.draw.ellipse(screen, (65, 15, 105), (bx - 57, by - 53, 114, 112))
-    pygame.draw.ellipse(screen, (185, 45, 160), (bx - 51, by - 49, 102, 100), 5)
-    pygame.draw.circle(screen, (255, 55, 35), (bx - 22, by - 8), 13)
-    pygame.draw.circle(screen, (255, 225, 90), (bx - 22, by - 8), 6)
-    pygame.draw.circle(screen, (255, 55, 35), (bx + 22, by - 8), 13)
-    pygame.draw.circle(screen, (255, 225, 90), (bx + 22, by - 8), 6)
-    pygame.draw.ellipse(screen, (25, 3, 20), (bx - 25, by + 12, 50, 31))
-    for tooth_x in range(-18, 19, 9):
-        pygame.draw.polygon(screen, WHITE, [(bx + tooth_x, by + 13), (bx + tooth_x + 4, by + 25), (bx + tooth_x + 8, by + 13)])
-    pygame.draw.ellipse(screen, (255, 90, 145), (bx - 57, by - 53, 114, 112), 2)
+    # Broad soft mantle with a natural highlight and mottled alien skin.
+    mantle = pygame.Rect(bx - 63, by - 62, 126, 119)
+    pygame.draw.ellipse(screen, (45, 8, 76), mantle.inflate(14, 12))
+    pygame.draw.ellipse(screen, skin, mantle)
+    pygame.draw.ellipse(screen, skin_light, (bx - 51, by - 55, 102, 97), 4)
+    pygame.draw.ellipse(screen, (210, 105, 190), (bx - 37, by - 53, 48, 22))
+    for spot in range(9):
+        angle = spot * 2.399
+        sx = int(bx + math.cos(angle) * (24 + (spot % 3) * 8))
+        sy = int(by - 8 + math.sin(angle) * (20 + (spot % 2) * 7))
+        pygame.draw.circle(screen, (112, 35, 135), (sx, sy), 3 + spot % 3)
+
+    # Brow ridges and glowing eyes that track the player's horizontal position.
+    look = max(-5, min(5, int((px - bx) / 35))) if "px" in globals() else 0
+    for eye_x in (bx - 24, bx + 24):
+        pygame.draw.ellipse(screen, (35, 3, 28), (eye_x - 17, by - 23, 34, 31))
+        pygame.draw.ellipse(screen, (255, 55, 42), (eye_x - 12, by - 19, 24, 23))
+        pygame.draw.circle(screen, (255, 225, 145), (eye_x + look, by - 8), 7)
+        pygame.draw.circle(screen, (20, 4, 22), (eye_x + look, by - 8), 3)
+        pygame.draw.circle(screen, WHITE, (eye_x + look - 2, by - 11), 2)
+    pygame.draw.arc(screen, (35, 5, 42), (bx - 48, by - 35, 34, 24), 0.2, 2.8, 5)
+    pygame.draw.arc(screen, (35, 5, 42), (bx + 14, by - 35, 34, 24), 0.3, 2.9, 5)
+
+    # Beak-like alien mouth and wet-looking inner glow.
+    mouth = pygame.Rect(bx - 23, by + 15, 46, 30)
+    pygame.draw.ellipse(screen, (24, 2, 22), mouth)
+    pygame.draw.arc(screen, (255, 100, 160), (bx - 22, by + 13, 44, 29), 0.1, 3.0, 3)
+    pygame.draw.polygon(screen, (245, 215, 225), [
+        (bx - 8, by + 18), (bx, by + 32), (bx + 8, by + 18)
+    ])
+    pygame.draw.polygon(screen, (245, 215, 225), [
+        (bx - 7, by + 43), (bx, by + 32), (bx + 7, by + 43)
+    ])
     return tips
 
 def explosion(x, y, color, amount=22):
@@ -439,7 +512,8 @@ while running:
                         enemy_bullets.clear()
                         if boss is not None:
                             boss["hp"] -= 30
-                        explosion(px, py, YELLOW, 45)
+                        explosion(px, py, YELLOW, 65)
+                        play_sound(explosion_sound)
                         play_sound(power_sound)
                 else:
                     touching = True
@@ -616,7 +690,7 @@ while running:
                 bullets.append([px, py - 28, 0, shot_damage])
 
             shot_timer = 0
-            if random.random() < 0.12:
+            if random.random() < 0.72:
                 play_sound(laser_sound)
 
         for b in bullets[:]:
@@ -670,8 +744,8 @@ while running:
                         combo = min(5, combo + 1) if combo_timer > 0 else 1
                         combo_timer = 2400
                         score += 10 * combo
-                        explosion(ex, ey, color, 26 if kind == "armored" else 18)
-                        play_sound(hit_sound)
+                        explosion(ex, ey, color, 30 if kind == "armored" else 22)
+                        play_sound(explosion_sound)
                         if random.random() < 0.24:
                             drops.append([ex, ey, random.choices(
                                 ["shield", "weapon", "bomb", "repair"],
@@ -779,7 +853,8 @@ while running:
             pygame.draw.rect(screen, GREEN, (W // 2 - 115, 130, hpw, 10))
 
             if boss["hp"] <= 0:
-                explosion(bx, by, PURPLE, 55)
+                explosion(bx, by, PURPLE, 85)
+                play_sound(explosion_sound)
                 score += 100
                 # Boss rewards are permanent until this run ends.
                 weapon_level = min(5, weapon_level + 1)
