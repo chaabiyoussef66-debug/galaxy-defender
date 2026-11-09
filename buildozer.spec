@@ -1,7 +1,7 @@
 
 [app]
 
-title = Galaxy Defender 3.2
+title = Galaxy Defender 3.3
 
 package.name = galaxydefender32
 
@@ -11,7 +11,7 @@ source.dir = .
 
 source.include_exts = py,txt,png,jpg,jpeg,wav,ogg,ttf
 
-version = 3.2
+version = 3.3
 
 requirements = python3,pygame
 
