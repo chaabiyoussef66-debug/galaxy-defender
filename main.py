@@ -651,7 +651,7 @@ while running:
         # Boss
         if boss is not None:
             boss["phase"] = (
-                3 if boss.get("ultimate") and boss["hp"] <= boss["maxhp"] * 0.25
+                3 if boss["hp"] <= boss["maxhp"] * 0.20
                 else 2 if boss["hp"] <= boss["maxhp"] * 0.5
                 else 1
             )
@@ -683,7 +683,7 @@ while running:
                     shots = patterns[boss["pattern"] % len(patterns)]
                     boss["pattern"] = (boss["pattern"] + 1) % len(patterns)
                 else:
-                    # The Omega Overlord's final phase fires a heavy seven-lane volley.
+                    # Every boss becomes enraged below 20% health and fires a heavy seven-lane volley.
                     shots = [(-84, 5.0), (-56, 5.3), (-28, 5.6), (0, 5.9),
                              (28, 5.6), (56, 5.3), (84, 5.0)]
                 for dx, speed in shots:
