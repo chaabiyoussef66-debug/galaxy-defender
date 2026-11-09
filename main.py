@@ -187,6 +187,10 @@ hit_sound = make_combat_sound(0.19, 0.30, 260, 0.72, 7.0)
 power_sound = make_tone(260, 0.42, 0.25, 1800)
 boss_sound = make_combat_sound(0.78, 0.34, 72, 0.76, 2.6)
 gameover_sound = make_tone(450, 0.6, 0.2, -350)
+venom_sound = make_combat_sound(0.32, 0.25, 520, 0.82, 5.0)
+rocket_sound = make_combat_sound(0.42, 0.30, 180, 0.55, 3.5)
+blade_sound = make_tone(950, 0.18, 0.22, -500)
+summon_sound = make_combat_sound(0.55, 0.28, 145, 0.8, 2.8)
 
 sound_on = True
 
@@ -300,96 +304,37 @@ def draw_ship(x, y, shield=False, ship_type=0):
         pygame.draw.circle(screen, CYAN, (x, y), 37, 3)
         pygame.draw.circle(screen, BLUE, (x, y), 42, 1)
 
-def draw_octopus_boss(bx, by, phase):
-    """Render a living deep-space cephalopod with eight muscular, independently moving arms."""
+def draw_spider_boss(bx, by, phase):
+    """Animated armored alien spider queen with eight articulated legs."""
     tick = pygame.time.get_ticks() / 1000.0
-    skin = (92, 24, 126)
-    skin_light = (174, 58, 178)
-    rim = (255, 86, 150)
-    sucker = (255, 176, 205)
-
-    # Dark aura makes the creature feel huge against the star field.
-    pygame.draw.ellipse(screen, (24, 5, 48), (bx - 116, by - 75, 232, 220))
-
-    # Eight arms: each is a tapered, segmented curve with two rows of suckers.
-    tips = []
+    armor = (118, 32, 48)
+    pygame.draw.ellipse(screen, (28, 4, 18), (bx-132, by-72, 264, 190))
     for i in range(8):
         side = -1 if i < 4 else 1
-        row = i if i < 4 else i - 4
-        root_x = bx + side * (25 + row * 5)
-        root_y = by + 23 + row * 5
-        reach = 92 + row * 17
-        wave = math.sin(tick * (1.65 + row * 0.19) + i * 1.13) * (15 + phase * 4)
-        curl = math.sin(tick * 1.1 + i * 0.8) * 15
-        tip_x = bx + side * (reach + wave)
-        tip_y = by + 86 + row * 17 + math.cos(tick * 1.45 + i * 0.92) * 13
-        points = []
-        for step in range(13):
-            t = step / 12.0
-            bend = math.sin(t * math.pi + tick * 1.5 + i * 0.73) * (18 + phase * 2) * t
-            px_arm = root_x + (tip_x - root_x) * t + side * curl * t * t
-            py_arm = root_y + (tip_y - root_y) * t + bend
-            points.append((int(px_arm), int(py_arm)))
-
-        # Draw the arm as overlapping muscle segments so it tapers naturally.
-        for j in range(len(points) - 1):
-            t = j / (len(points) - 1)
-            width = max(3, int((15 - row * 1.2) * (1.0 - 0.72 * t)))
-            pygame.draw.line(screen, skin, points[j], points[j + 1], width + 4)
-            pygame.draw.line(screen, skin_light, points[j], points[j + 1], width)
-        pygame.draw.circle(screen, skin_light, points[0], max(5, 8 - row // 2))
-        pygame.draw.circle(screen, rim, points[-1], 4)
-
-        # Paired suction cups follow the moving arm, not a straight line.
-        for j in range(2, 11):
-            x, y = points[j]
-            tangent_x = points[min(12, j + 1)][0] - points[max(0, j - 1)][0]
-            tangent_y = points[min(12, j + 1)][1] - points[max(0, j - 1)][1]
-            length = max(1.0, math.hypot(tangent_x, tangent_y))
-            nx, ny = -tangent_y / length, tangent_x / length
-            cup_r = max(2, int(4 - row * 0.35))
-            for side_offset in (-1, 1):
-                cx = int(x + nx * cup_r * side_offset * 1.35)
-                cy = int(y + ny * cup_r * side_offset * 1.35)
-                pygame.draw.circle(screen, (64, 10, 86), (cx, cy), cup_r + 1)
-                pygame.draw.circle(screen, sucker, (cx, cy), max(1, cup_r - 1))
-                pygame.draw.circle(screen, (255, 225, 235), (cx, cy), 1)
-        tips.append((tip_x, tip_y))
-
-    # Broad soft mantle with a natural highlight and mottled alien skin.
-    mantle = pygame.Rect(bx - 63, by - 62, 126, 119)
-    pygame.draw.ellipse(screen, (45, 8, 76), mantle.inflate(14, 12))
-    pygame.draw.ellipse(screen, skin, mantle)
-    pygame.draw.ellipse(screen, skin_light, (bx - 51, by - 55, 102, 97), 4)
-    pygame.draw.ellipse(screen, (210, 105, 190), (bx - 37, by - 53, 48, 22))
-    for spot in range(9):
-        angle = spot * 2.399
-        sx = int(bx + math.cos(angle) * (24 + (spot % 3) * 8))
-        sy = int(by - 8 + math.sin(angle) * (20 + (spot % 2) * 7))
-        pygame.draw.circle(screen, (112, 35, 135), (sx, sy), 3 + spot % 3)
-
-    # Brow ridges and glowing eyes that track the player's horizontal position.
-    look = max(-5, min(5, int((px - bx) / 35))) if "px" in globals() else 0
-    for eye_x in (bx - 24, bx + 24):
-        pygame.draw.ellipse(screen, (35, 3, 28), (eye_x - 17, by - 23, 34, 31))
-        pygame.draw.ellipse(screen, (255, 55, 42), (eye_x - 12, by - 19, 24, 23))
-        pygame.draw.circle(screen, (255, 225, 145), (eye_x + look, by - 8), 7)
-        pygame.draw.circle(screen, (20, 4, 22), (eye_x + look, by - 8), 3)
-        pygame.draw.circle(screen, WHITE, (eye_x + look - 2, by - 11), 2)
-    pygame.draw.arc(screen, (35, 5, 42), (bx - 48, by - 35, 34, 24), 0.2, 2.8, 5)
-    pygame.draw.arc(screen, (35, 5, 42), (bx + 14, by - 35, 34, 24), 0.3, 2.9, 5)
-
-    # Beak-like alien mouth and wet-looking inner glow.
-    mouth = pygame.Rect(bx - 23, by + 15, 46, 30)
-    pygame.draw.ellipse(screen, (24, 2, 22), mouth)
-    pygame.draw.arc(screen, (255, 100, 160), (bx - 22, by + 13, 44, 29), 0.1, 3.0, 3)
-    pygame.draw.polygon(screen, (245, 215, 225), [
-        (bx - 8, by + 18), (bx, by + 32), (bx + 8, by + 18)
-    ])
-    pygame.draw.polygon(screen, (245, 215, 225), [
-        (bx - 7, by + 43), (bx, by + 32), (bx + 7, by + 43)
-    ])
-    return tips
+        row = i if i < 4 else i-4
+        root=(int(bx+side*(25+row*8)),int(by+10+row*5))
+        swing=math.sin(tick*(2+row*.12)+i*.9)*(13+phase*4)
+        knee=(int(bx+side*(62+row*13+swing)),int(by+30+row*19))
+        foot=(int(bx+side*(105+row*17-swing)),int(by+75+row*17+math.cos(tick*1.7+i)*9))
+        pygame.draw.line(screen,(30,7,20),root,knee,15)
+        pygame.draw.line(screen,armor,root,knee,10)
+        pygame.draw.circle(screen,(220,75,72),knee,8)
+        pygame.draw.line(screen,(30,7,20),knee,foot,10)
+        pygame.draw.line(screen,(150,48,56),knee,foot,6)
+        pygame.draw.circle(screen,(235,90,80),foot,5)
+    pygame.draw.ellipse(screen,(25,5,17),(bx-68,by-12,136,106))
+    pygame.draw.ellipse(screen,(48,18,30),(bx-61,by-20,122,92))
+    pygame.draw.ellipse(screen,armor,(bx-53,by-18,106,76),5)
+    pygame.draw.ellipse(screen,(35,6,18),(bx-43,by-61,86,66))
+    pygame.draw.ellipse(screen,(126,27,39),(bx-37,by-57,74,57))
+    for ex,ey,r in [(-23,-39,8),(-8,-48,6),(8,-48,6),(23,-39,8),(-31,-23,4),(31,-23,4)]:
+        pygame.draw.circle(screen,(255,35,28),(bx+ex,by+ey),r+3)
+        pygame.draw.circle(screen,(255,190,95),(bx+ex,by+ey),r)
+        pygame.draw.circle(screen,(20,2,8),(bx+ex,by+ey),max(2,r//3))
+    pygame.draw.polygon(screen,(235,225,205),[(bx-18,by-4),(bx-27,by+22),(bx-8,by+9)])
+    pygame.draw.polygon(screen,(235,225,205),[(bx+18,by-4),(bx+27,by+22),(bx+8,by+9)])
+    pygame.draw.circle(screen,(105,255,45),(bx-14,by+5),5)
+    pygame.draw.circle(screen,(105,255,45),(bx+14,by+5),5)
 
 def explosion(x, y, color, amount=22):
     for _ in range(amount):
@@ -409,6 +354,7 @@ def reset_game():
     global shield_timer, weapon_timer, boss_done, shake, boss_warning_timer
     global combo, combo_timer, bombs, bomb_flash, sector, sector_banner_timer
     global weapon_level, max_lives, upgrade_flash_timer, upgrade_message
+    global rockets, blades
 
     px, py = W / 2, H - 110
     bullets, enemies, drops, particles, enemy_bullets = [], [], [], [], []
@@ -423,7 +369,8 @@ def reset_game():
     boss_done = 0
     boss_warning_timer = 0
     shake = 0
-    combo, combo_timer, bombs, bomb_flash = 0, 0, 2, 0
+    combo, combo_timer, bombs, bomb_flash = 0, 0, 3, 0
+    rockets, blades = 4, 12
     sector, sector_banner_timer = 1, 0
 
 MENU, SELECT_SHIP, PLAY, PAUSE, OVER, EXIT_CONFIRM = range(6)
@@ -441,6 +388,8 @@ ship_prev_button = pygame.Rect(35, 420, 115, 52)
 ship_next_button = pygame.Rect(W - 150, 420, 115, 52)
 ship_start_button = pygame.Rect(90, 510, 300, 58)
 bomb_button = pygame.Rect(W - 118, 116, 108, 38)
+rocket_button = pygame.Rect(W - 118, 160, 108, 38)
+blade_button = pygame.Rect(W - 118, 204, 108, 38)
 
 reset_game()
 running = True
@@ -515,6 +464,17 @@ while running:
                         explosion(px, py, YELLOW, 65)
                         play_sound(explosion_sound)
                         play_sound(power_sound)
+                elif rocket_button.collidepoint(pos):
+                    if rockets > 0:
+                        rockets -= 1
+                        play_sound(rocket_sound)
+                        bullets.append([px, py-20, 0, 12, "rocket"])
+                elif blade_button.collidepoint(pos):
+                    if blades > 0:
+                        blades -= 1
+                        play_sound(blade_sound)
+                        for dx in (-2.8, 0, 2.8):
+                            bullets.append([px, py-20, dx, 4, "blade"])
                 else:
                     touching = True
                     touch_pos = pos
@@ -577,6 +537,17 @@ while running:
                             boss["hp"] -= 18
                         explosion(px, py, YELLOW, 45)
                         play_sound(power_sound)
+                elif rocket_button.collidepoint(pos):
+                    if rockets > 0:
+                        rockets -= 1
+                        play_sound(rocket_sound)
+                        bullets.append([px, py-20, 0, 12, "rocket"])
+                elif blade_button.collidepoint(pos):
+                    if blades > 0:
+                        blades -= 1
+                        play_sound(blade_sound)
+                        for dx in (-2.8, 0, 2.8):
+                            bullets.append([px, py-20, dx, 4, "blade"])
                 else:
                     touching = True
                     touch_pos = pos
@@ -645,20 +616,19 @@ while running:
         # A major boss closes each five-level sector.
         if level % 5 == 0 and boss is None and boss_done < level:
             ultimate_boss = level >= 25
-            # The alien octopus is the signature boss from the very first boss encounter.
-            # Its health scales normally early and gains the ultimate bonus only at level 25.
-            octopus_boss = True
+            # The Spider Queen is the signature boss of the 3.4 apocalypse campaign.
+            spider_boss = True
             boss_hp = int((85 + level * 7) * (1.5 if ultimate_boss else 1.0))
             boss = {
                 "x": W / 2, "y": 155,
                 "hp": boss_hp,
                 "maxhp": boss_hp,
                 "dir": 1, "fire": 0,
-                "name": "VOID OCTOPUS" if ultimate_boss else "SPACE OCTOPUS",
+                "name": "VOID SPIDER QUEEN" if ultimate_boss else "BROOD MOTHER",
                 "style": (sector - 1) % len(BOSS_PALETTES),
                 "phase": 1, "pattern": 0,
                 "ultimate": ultimate_boss,
-                "octopus": octopus_boss
+                "spider": spider_boss, "summon": 0
             }
             boss_warning_timer = 2200
             boss_done = level
@@ -710,8 +680,8 @@ while running:
 
         # Enemy spawning
         if boss is None and spawn_timer > max(300, 850 - level * 35):
-            kind = random.choices(["scout", "armored", "shooter"], weights=[55, 25, 20], k=1)[0]
-            base = {"scout": (3.4, 13, 1), "armored": (1.25, 22, 3), "shooter": (2.0, 17, 1)}[kind]
+            kind = random.choices(["scout", "armored", "shooter", "spiderling", "roach"], weights=[38, 18, 14, 18, 12], k=1)[0]
+            base = {"scout": (3.4, 13, 1), "armored": (1.25, 22, 3), "shooter": (2.0, 17, 1), "spiderling": (2.7, 12, 2), "roach": (2.1, 16, 2)}[kind]
             enemies.append({"x": random.randint(25, W - 25), "y": -25,
                 "speed": base[0] + level * 0.10, "radius": base[1],
                 "kind": kind, "hp": base[2], "fire": random.randint(700, 1500)})
@@ -721,7 +691,7 @@ while running:
             e["y"] += e["speed"]
             ex, ey, radius = e["x"], e["y"], e["radius"]
             kind = e["kind"]
-            color = {"scout": CYAN, "armored": PURPLE, "shooter": ORANGE}[kind]
+            color = {"scout": CYAN, "armored": PURPLE, "shooter": ORANGE, "spiderling": (220, 55, 75), "roach": (130, 190, 45)}[kind]
             if kind == "armored":
                 pygame.draw.circle(screen, color, (int(ex), int(ey)), radius + 4, 3)
                 pygame.draw.rect(screen, color, (int(ex-radius), int(ey-radius), radius*2, radius*2), border_radius=5)
@@ -731,6 +701,18 @@ while running:
                 if e["fire"] <= 0 and ey < H - 170:
                     enemy_bullets.append([ex, ey + radius, 3.8 + level * 0.08])
                     e["fire"] = random.randint(1500, 2300)
+            elif kind == "spiderling":
+                pygame.draw.circle(screen, color, (int(ex), int(ey)), radius)
+                for side in (-1, 1):
+                    pygame.draw.line(screen, color, (int(ex),int(ey)), (int(ex+side*radius*1.7),int(ey+radius)), 3)
+                    pygame.draw.line(screen, color, (int(ex),int(ey)), (int(ex+side*radius*1.7),int(ey-radius)), 3)
+                pygame.draw.circle(screen, RED, (int(ex-4),int(ey-2)), 2)
+                pygame.draw.circle(screen, RED, (int(ex+4),int(ey-2)), 2)
+            elif kind == "roach":
+                pygame.draw.ellipse(screen, color, (int(ex-radius),int(ey-radius*.65),radius*2,int(radius*1.3)))
+                for side in (-1,1):
+                    pygame.draw.line(screen,color,(int(ex),int(ey)),(int(ex+side*radius*1.6),int(ey+radius)),3)
+                    pygame.draw.line(screen,YELLOW,(int(ex),int(ey-radius//2)),(int(ex+side*radius*1.5),int(ey-radius*1.5)),2)
             else:
                 pygame.draw.polygon(screen, CYAN, [(int(ex), int(ey+radius)), (int(ex-radius), int(ey-radius)), (int(ex), int(ey-radius//2)), (int(ex+radius), int(ey-radius))])
             pygame.draw.circle(screen, WHITE, (int(ex), int(ey)), 3)
@@ -792,16 +774,25 @@ while running:
                 boss["dir"] = 1
 
             boss["fire"] += dt
+            boss["summon"] += dt
+            summon_interval = 5200 if boss["phase"] == 1 else 3600 if boss["phase"] == 2 else 2300
+            if boss.get("spider") and boss["summon"] >= summon_interval:
+                sides = (-1, 1) if boss["phase"] >= 2 else (random.choice((-1, 1)),)
+                for side in sides:
+                    enemies.append({"x": max(22,min(W-22,boss["x"]+side*58)), "y": boss["y"]+35,
+                        "speed": 2.5+boss["phase"]*.45, "radius": 12, "kind": "spiderling", "hp": 2, "fire": 99999})
+                boss["summon"] = 0
+                play_sound(summon_sound)
             fire_interval = 900 if boss["phase"] == 1 else 540 if boss["phase"] == 2 else 380
             if boss["fire"] > fire_interval:
-                if boss.get("octopus"):
-                    # The octopus fires from its tentacles; each phase adds lanes.
-                    lanes = 3 if boss["phase"] == 1 else 5 if boss["phase"] == 2 else 7
-                    spread = 22 if boss["phase"] == 1 else 28
+                if boss.get("spider"):
+                    lanes = 2 if boss["phase"] == 1 else 4 if boss["phase"] == 2 else 6
+                    spread = 24 if boss["phase"] == 1 else 27
                     for lane in range(lanes):
                         dx = (lane - (lanes - 1) / 2) * spread
-                        speed = 3.8 + boss["phase"] * 0.75
-                        enemy_bullets.append([boss["x"] + dx, boss["y"] + 65, speed])
+                        speed = 4.0 + boss["phase"] * 0.85
+                        enemy_bullets.append([boss["x"] + dx, boss["y"] + 18, speed, "venom"])
+                    play_sound(venom_sound)
                 elif boss["phase"] == 1:
                     shots = [(-36, 3.6), (0, 4.1), (36, 3.6)]
                 elif boss["phase"] == 2:
@@ -817,7 +808,7 @@ while running:
                     # Every boss becomes enraged below 20% health and fires a heavy seven-lane volley.
                     shots = [(-84, 5.0), (-56, 5.3), (-28, 5.6), (0, 5.9),
                              (28, 5.6), (56, 5.3), (84, 5.0)]
-                if not boss.get("octopus"):
+                if not boss.get("spider"):
                     for dx, speed in shots:
                         enemy_bullets.append([boss["x"] + dx, boss["y"] + 32, speed])
                 boss["fire"] = 0
@@ -826,8 +817,8 @@ while running:
 
             # Sector-specific boss colors and identity.
             boss_color, boss_core, boss_glow = BOSS_PALETTES[boss["style"]]
-            if boss.get("octopus"):
-                draw_octopus_boss(bx, by, boss["phase"])
+            if boss.get("spider"):
+                draw_spider_boss(bx, by, boss["phase"])
             else:
                 pygame.draw.circle(screen, boss_glow, (bx, by), 59)
                 pygame.draw.circle(screen, boss_color, (bx, by), 49, 3)
@@ -871,7 +862,10 @@ while running:
         # Enemy projectiles
         for b in enemy_bullets[:]:
             b[1] += b[2]
-            pygame.draw.circle(screen, RED, (int(b[0]), int(b[1])), 6)
+            venom = len(b) > 3 and b[3] == "venom"
+            pygame.draw.circle(screen, (105,255,35) if venom else RED, (int(b[0]),int(b[1])), 8 if venom else 6)
+            if venom:
+                pygame.draw.circle(screen, (220,255,160), (int(b[0]),int(b[1])), 3)
 
             if b[1] > H:
                 enemy_bullets.remove(b)
@@ -921,6 +915,8 @@ while running:
 
         draw_button(pause_button, "PAUSE", PURPLE)
         draw_button(bomb_button, "BOMB x" + str(bombs), YELLOW)
+        draw_button(rocket_button, "ROCKET x" + str(rockets), ORANGE)
+        draw_button(blade_button, "BLADE x" + str(blades), CYAN)
         if combo > 1 and combo_timer > 0:
             text("COMBO x" + str(combo), font, YELLOW, W / 2, 70, True)
         if boss_warning_timer > 0:
