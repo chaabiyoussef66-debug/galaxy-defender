@@ -67,7 +67,7 @@ try:
 except Exception:
     AUDIO = False
 
-pygame.display.set_caption("GALAXY DEFENDER 3.1")
+pygame.display.set_caption("GALAXY DEFENDER 3.2")
 display_info = pygame.display.Info()
 display_w = max(1, display_info.current_w or 480)
 display_h = max(1, display_info.current_h or 854)
@@ -388,7 +388,7 @@ while running:
                         enemies.clear()
                         enemy_bullets.clear()
                         if boss is not None:
-                            boss["hp"] -= 18
+                            boss["hp"] -= 30
                         explosion(px, py, YELLOW, 45)
                         play_sound(power_sound)
                 else:
@@ -519,14 +519,17 @@ while running:
 
         # A major boss closes each five-level sector.
         if level % 5 == 0 and boss is None and boss_done < level:
+            ultimate_boss = level >= 25
+            boss_hp = int((85 + level * 7) * (1.5 if ultimate_boss else 1.0))
             boss = {
                 "x": W / 2, "y": 155,
-                "hp": 85 + level * 7,
-                "maxhp": 85 + level * 7,
+                "hp": boss_hp,
+                "maxhp": boss_hp,
                 "dir": 1, "fire": 0,
-                "name": BOSS_NAMES[(sector - 1) % len(BOSS_NAMES)],
+                "name": "OMEGA OVERLORD" if ultimate_boss else BOSS_NAMES[(sector - 1) % len(BOSS_NAMES)],
                 "style": (sector - 1) % len(BOSS_PALETTES),
-                "phase": 1, "pattern": 0
+                "phase": 1, "pattern": 0,
+                "ultimate": ultimate_boss
             }
             boss_warning_timer = 2200
             boss_done = level
@@ -603,8 +606,11 @@ while running:
                         score += 10 * combo
                         explosion(ex, ey, color, 26 if kind == "armored" else 18)
                         play_sound(hit_sound)
-                        if random.random() < 0.20:
-                            drops.append([ex, ey, random.choice(["shield", "weapon"])])
+                        if random.random() < 0.24:
+                            drops.append([ex, ey, random.choices(
+                                ["shield", "weapon", "bomb", "repair"],
+                                weights=[35, 35, 20, 10], k=1
+                            )[0]])
                     break
             if e not in enemies:
                 continue
@@ -627,11 +633,17 @@ while running:
 
         # Boss
         if boss is not None:
-            boss["phase"] = 2 if boss["hp"] <= boss["maxhp"] * 0.5 else 1
+            boss["phase"] = (
+                3 if boss.get("ultimate") and boss["hp"] <= boss["maxhp"] * 0.25
+                else 2 if boss["hp"] <= boss["maxhp"] * 0.5
+                else 1
+            )
             boss_speed = 2.0 + level * 0.07
-            # Phase II is faster and more aggressive below 50% health.
+            # Later phases become faster, with a third phase for the ultimate boss.
             if boss["phase"] == 2:
                 boss_speed *= 1.55
+            elif boss["phase"] == 3:
+                boss_speed *= 1.9
             boss["x"] += boss["dir"] * boss_speed
 
             if boss["x"] > W - 75:
@@ -640,12 +652,12 @@ while running:
                 boss["dir"] = 1
 
             boss["fire"] += dt
-            fire_interval = 900 if boss["phase"] == 1 else 540
+            fire_interval = 900 if boss["phase"] == 1 else 540 if boss["phase"] == 2 else 380
             if boss["fire"] > fire_interval:
                 if boss["phase"] == 1:
                     shots = [(-36, 3.6), (0, 4.1), (36, 3.6)]
-                else:
-                    # Phase II cycles through three wider, denser attack waves.
+                elif boss["phase"] == 2:
+                    # Phase II cycles through wider, denser attack waves.
                     patterns = [
                         [(-64, 4.2), (-32, 4.5), (0, 4.8), (32, 4.5), (64, 4.2)],
                         [(-42, 5.0), (-14, 5.3), (14, 5.3), (42, 5.0)],
@@ -653,6 +665,10 @@ while running:
                     ]
                     shots = patterns[boss["pattern"] % len(patterns)]
                     boss["pattern"] = (boss["pattern"] + 1) % len(patterns)
+                else:
+                    # The Omega Overlord's final phase fires a heavy seven-lane volley.
+                    shots = [(-84, 5.0), (-56, 5.3), (-28, 5.6), (0, 5.9),
+                             (28, 5.6), (56, 5.3), (84, 5.0)]
                 for dx, speed in shots:
                     enemy_bullets.append([boss["x"] + dx, boss["y"] + 32, speed])
                 boss["fire"] = 0
@@ -677,7 +693,7 @@ while running:
                     boss["hp"] -= 1
 
             # Boss identity and health
-            phase_label = "  - PHASE II" if boss["phase"] == 2 else ""
+            phase_label = "  - PHASE III" if boss["phase"] == 3 else "  - PHASE II" if boss["phase"] == 2 else ""
             text(boss["name"] + phase_label, small, boss_core, W / 2, 108, True)
             bw = 230
             pygame.draw.rect(screen, RED, (W // 2 - 115, 130, bw, 10))
@@ -713,16 +729,23 @@ while running:
         # Pickups
         for d in drops[:]:
             d[1] += 2
-            color = CYAN if d[2] == "shield" else YELLOW
+            color = {
+                "shield": CYAN, "weapon": YELLOW,
+                "bomb": ORANGE, "repair": GREEN
+            }[d[2]]
             pygame.draw.circle(screen, color, (int(d[0]), int(d[1])), 14, 3)
-            text("S" if d[2] == "shield" else "W",
-                 small, color, d[0], d[1], True)
+            pickup_label = {"shield": "S", "weapon": "W", "bomb": "B", "repair": "+"}[d[2]]
+            text(pickup_label, small, color, d[0], d[1], True)
 
             if math.hypot(d[0] - px, d[1] - py) < 30:
                 if d[2] == "shield":
                     shield_timer = 5000
-                else:
+                elif d[2] == "weapon":
                     weapon_timer = 7000
+                elif d[2] == "bomb":
+                    bombs = min(4, bombs + 1)
+                else:
+                    lives = min(5, lives + 1)
                 drops.remove(d)
                 play_sound(power_sound)
             elif d[1] > H:
