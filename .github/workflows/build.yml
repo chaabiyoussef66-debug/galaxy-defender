@@ -298,6 +298,9 @@ jobs:
           fi
           chmod 600 "$signing_dir/galaxy-defender-30.jks"
           echo "Base64 decode passed; keystore file is non-empty."
+          echo "Safe keystore integrity diagnostics (no secret values):"
+          echo "Decoded keystore bytes: $(wc -c < "$signing_dir/galaxy-defender-30.jks" | tr -d " ")"
+          sha256sum "$signing_dir/galaxy-defender-30.jks" | awk '{print "Decoded keystore SHA-256: " $1}'
 
           echo "PRECHECK 3/4: validating keystore password and alias with keytool."
           keytool_diag="$(mktemp "$RUNNER_TEMP/keytool-precheck.XXXXXX")"
