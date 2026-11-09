@@ -15,7 +15,7 @@ version = 3.0
 
 requirements = python3,pygame
 
-orientation = landscape
+orientation = portrait
 
 fullscreen = 1
 
