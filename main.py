@@ -926,7 +926,7 @@ while running:
         draw_ship(px, py, shield_timer > 0, selected_ship)
 
         # HUD
-        text("GALAXY DEFENDER", small, CYAN, 10, 10)
+        text("GALAXY DEFENDER 3.5", small, CYAN, 10, 10)
         text("SCORE " + str(score), font, WHITE, 10, 37)
         text("LEVEL " + str(level), font, YELLOW, 10, 101)
         text("LIVES " + str(lives) + "/" + str(max_lives), font, GREEN, 10, 129)
