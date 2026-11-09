@@ -9,6 +9,7 @@ on:
       - galaxy-defender-3.2
       - galaxy-defender-3.3
       - galaxy-defender-3.4
+      - galaxy-defender-3.5
 
 jobs:
   build:
@@ -86,6 +87,1018 @@ jobs:
           cython --version
           buildozer --version
           java -version
+
+      - name: Validate Python source and 3.5 package configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile main.py
+          grep -q '^title = Galaxy Defender 3.5        run: |
+          test -f p4a-recipes/pygame/__init__.py
+          grep -n "2.6.1" p4a-recipes/pygame/__init__.py
+          test -f p4a-recipes/openssl/__init__.py
+          grep -n "mirror.math.princeton.edu/pub/openssl/source" p4a-recipes/openssl/__init__.py
+          test -f p4a-recipes/sdl2_image/__init__.py
+          grep -n "www.libsdl.org/projects/SDL_image/release" p4a-recipes/sdl2_image/__init__.py
+          test -f p4a-recipes/sdl2/__init__.py
+          grep -n "www.libsdl.org/release/SDL2-" p4a-recipes/sdl2/__init__.py
+          test -f p4a-recipes/sdl2_ttf/__init__.py
+          grep -n "SDL2_ttf-{version}.tar.gz" p4a-recipes/sdl2_ttf/__init__.py
+          grep -n "b54e93b100712e3764cd80d4e4b16cd4c2a6853620f675941a4214320b0ee29a583d57ad56cd5fdb5c7a32d7615cbf43bc3fa55337b01623cee7219ebb43667c" p4a-recipes/sdl2_ttf/__init__.py
+          grep -n "cf3098950cb4d853ad95c0841f1f9c6d3dc102dccfcacd521d93925208b76ac8" p4a-recipes/openssl/__init__.py
+          grep -n "p4a.local_recipes" buildozer.spec
+
+      - name: Preflight verified OpenSSL mirror
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/openssl-1.1.1w.tar.gz"
+          curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 "https://mirror.math.princeton.edu/pub/openssl/source/openssl-1.1.1w.tar.gz" --output "$archive"
+          echo "cf3098950cb4d853ad95c0841f1f9c6d3dc102dccfcacd521d93925208b76ac8  $archive" | sha256sum --check
+          rm -f "$archive"
+
+      - name: Preflight official SDL2 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/SDL2-2.28.5.tar.gz"
+          curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 "https://www.libsdl.org/release/SDL2-2.28.5.tar.gz" --output "$archive"
+          echo "a344eb827a03045c9b399e99af4af13d  $archive" | md5sum --check
+          tar -tzf "$archive" >/dev/null
+          echo "Official SDL2 archive downloaded, checksum-verified, and validated."
+          rm -f "$archive"
+
+      - name: Preflight official SDL2_mixer source
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/SDL2_mixer-2.6.3.tar.gz"
+          curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 "https://www.libsdl.org/projects/SDL_mixer/release/SDL2_mixer-2.6.3.tar.gz" --output "$archive"
+          tar -tzf "$archive" >/dev/null
+          echo "Official SDL2_mixer archive downloaded and validated."
+          rm -f "$archive"
+
+      - name: Preflight official SDL2_image source
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/SDL2_image-2.8.0.tar.gz"
+          curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 "https://www.libsdl.org/projects/SDL_image/release/SDL2_image-2.8.0.tar.gz" --output "$archive"
+          tar -tzf "$archive" >/dev/null
+          echo "Official SDL2_image archive downloaded and validated."
+          rm -f "$archive"
+
+      - name: Verify official SDL2_ttf signature and SHA-512
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="2.20.2"
+          filename="SDL2_ttf-${version}.tar.gz"
+          base_url="https://www.libsdl.org/projects/SDL_ttf/release"
+          archive="$RUNNER_TEMP/$filename"
+          signature="$RUNNER_TEMP/$filename.sig"
+          status_file="$RUNNER_TEMP/sdl2_ttf-gpg-status.txt"
+          # SDL currently publishes two trusted release-signing public keys.
+          # The 2023 SDL2_ttf signature may be made by the older key, which GPG
+          # imports as a separate primary key (not as a subkey of the newer key).
+          trusted_fingerprints=(
+            "1528635D8053A57F77D1E08630A59377A7763BE6"
+            "0900104363B4C9D4223DE149D913FE7D4B61D39B"
+          )
+          expected_sha512="b54e93b100712e3764cd80d4e4b16cd4c2a6853620f675941a4214320b0ee29a583d57ad56cd5fdb5c7a32d7615cbf43bc3fa55337b01623cee7219ebb43667c"
+
+          sudo apt-get install -y gnupg
+          curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 "$base_url/$filename" --output "$archive"
+          curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 "$base_url/$filename.sig" --output "$signature"
+
+          # Import the complete public key block published by SDL itself.
+          # Keyserver responses previously supplied the primary key without
+          # the signing subkey used by the 2023 release signature.
+          python - "$RUNNER_TEMP/sdl-signing-keys.asc" <<'PY'
+          from html.parser import HTMLParser
+          from html import unescape
+          import re
+          import sys
+          import urllib.request
+
+          url = "https://libsdl.org/signing-keys.php"
+          with urllib.request.urlopen(url, timeout=30) as response:
+              page = response.read().decode("utf-8")
+          class Text(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.parts = []
+              def handle_data(self, data):
+                  self.parts.append(data)
+          parser = Text()
+          parser.feed(page)
+          text = unescape("\n".join(parser.parts))
+          match = re.search(r"-----BEGIN PGP PUBLIC KEY BLOCK-----.*?-----END PGP PUBLIC KEY BLOCK-----", text, re.S)
+          if not match:
+              raise SystemExit("Could not extract SDL's published OpenPGP key block")
+          with open(sys.argv[1], "w", encoding="ascii") as output:
+              output.write(match.group(0) + "\n")
+          PY
+          gpg --batch --import "$RUNNER_TEMP/sdl-signing-keys.asc"
+          # Confirm both independently published SDL keys are present with
+          # their exact full fingerprints before trusting either signature.
+          for expected_fingerprint in "${trusted_fingerprints[@]}"; do
+            actual_fingerprint="$(gpg --batch --with-colons --fingerprint "$expected_fingerprint" | awk -F: '$1 == "fpr" { print $10; exit }')"
+            test "$actual_fingerprint" = "$expected_fingerprint"
+          done
+
+          if ! gpg --batch --status-fd 1 --verify "$signature" "$archive" >"$status_file" 2>&1; then
+            cat "$status_file"
+            echo "::error::SDL2_ttf detached signature verification failed."
+            exit 1
+          fi
+          cat "$status_file"
+          verified_primary="$(awk '$2 == "VALIDSIG" { print (NF >= 12 ? $12 : $3) }' "$status_file")"
+          trusted_signer=false
+          for expected_fingerprint in "${trusted_fingerprints[@]}"; do
+            if [ "$verified_primary" = "$expected_fingerprint" ]; then
+              trusted_signer=true
+              break
+            fi
+          done
+          if [ "$trusted_signer" != true ]; then
+            echo "::error::SDL2_ttf signature was not made by either pinned SDL release key."
+            exit 1
+          fi
+
+          echo "$expected_sha512  $archive" | sha512sum --check
+          tar -tzf "$archive" >/dev/null
+          echo "SDL2_ttf $version: official signature, pinned key fingerprint, SHA-512, and archive structure verified."
+
+      - name: Prepare Gradle distribution cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="8.0.2"
+          distribution="gradle-${version}-all"
+          wrapper_url="https://services.gradle.org/distributions/${distribution}.zip"
+          expected_sha256="47a5bfed9ef814f90f8debcbbb315e8e7c654109acd224595ea39fca95c5d4da"
+          cache_root="${GRADLE_USER_HOME:-$HOME/.gradle}/wrapper/dists/${distribution}"
+          url_hash="$(printf '%s' "$wrapper_url" | md5sum | cut -d' ' -f1)"
+          cache_dir="$cache_root/$url_hash"
+          mkdir -p "$cache_dir"
+          archive="$cache_dir/${distribution}.zip"
+          mirrors=(
+            "https://repo.huaweicloud.com/repository/toolkit/gradle/${distribution}.zip"
+            "https://mirrors.aliyun.com/gradle/distributions/v${version}/${distribution}.zip"
+            "https://mirror.nju.edu.cn/gradle/${distribution}.zip"
+          )
+          downloaded=0
+          for mirror in "${mirrors[@]}"; do
+            echo "Trying Gradle mirror: $mirror"
+            rm -f "$archive"
+            if curl --fail --location --connect-timeout 20 --max-time 900 --retry 2 --retry-all-errors --retry-delay 3 "$mirror" --output "$archive"; then
+              actual_sha256="$(sha256sum "$archive" | cut -d' ' -f1)"
+              if [[ "$actual_sha256" == "$expected_sha256" ]] && unzip -tq "$archive"; then
+                downloaded=1
+                echo "Gradle archive checksum and ZIP integrity verified."
+                break
+              fi
+              echo "Mirror returned an invalid archive or checksum; trying the next mirror."
+            else
+              echo "Mirror download failed; trying the next mirror."
+            fi
+          done
+          if [[ "$downloaded" -ne 1 ]]; then
+            echo "::error::Could not download a verified Gradle ${version} distribution from any configured mirror."
+            exit 1
+          fi
+          unzip -q "$archive" -d "$cache_dir"
+          test -x "$cache_dir/gradle-${version}/bin/gradle"
+          touch "$cache_dir/${distribution}.zip.ok"
+          echo "Gradle ${version} cached for the Gradle wrapper."
+
+      - name: Build signed Release APK
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # Create the log before any preflight so the failure doctor never receives a missing file.
+          : > build.log
+
+          echo "PRECHECK 1/4: checking required secret presence (values are never printed)."
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Required secret is missing: $name"
+              exit 1
+            fi
+            echo "Present: $name"
+          done
+
+          signing_dir="$RUNNER_TEMP/galaxy-defender-signing"
+          mkdir -p "$signing_dir"
+          echo "PRECHECK 2/4: validating Base64 keystore and decoding JKS."
+          if ! printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$signing_dir/galaxy-defender-30.jks"; then
+            echo "::error::Keystore Base64 decoding failed."
+            exit 1
+          fi
+          if [[ ! -s "$signing_dir/galaxy-defender-30.jks" ]]; then
+            echo "::error::Decoded keystore is empty."
+            exit 1
+          fi
+          chmod 600 "$signing_dir/galaxy-defender-30.jks"
+          echo "Base64 decode passed; keystore file is non-empty."
+          echo "Safe keystore integrity diagnostics (no secret values):"
+          echo "Decoded keystore bytes: $(wc -c < "$signing_dir/galaxy-defender-30.jks" | tr -d " ")"
+          sha256sum "$signing_dir/galaxy-defender-30.jks" | awk '{print "Decoded keystore SHA-256: " $1}'
+
+          echo "PRECHECK 3/4: validating keystore password and alias with keytool."
+          keytool_diag="$(mktemp "$RUNNER_TEMP/keytool-precheck.XXXXXX")"
+          trap 'rm -f "$keytool_diag"' EXIT
+          if keytool -list \
+            -keystore "$signing_dir/galaxy-defender-30.jks" \
+            -storetype PKCS12 \
+            -storepass:env ANDROID_KEYSTORE_PASSWORD \
+            -alias "$ANDROID_KEY_ALIAS" >"$keytool_diag" 2>&1; then
+            echo "Keystore password and alias validation passed."
+          else
+            keytool_status=$?
+            echo "::error::Keystore password or alias validation failed (keytool exit $keytool_status)."
+            echo "Safe keytool diagnostic (secret values are not printed):"
+            if ! grep -Ei 'keytool error:|password|tampered|does not exist|exception|invalid' "$keytool_diag" \
+              | sed -E 's/Alias <[^>]*>/Alias <REDACTED>/g; s/alias [^ ]+/alias <REDACTED>/Ig' \
+              | head -n 5; then
+              echo "keytool did not provide a recognized diagnostic message."
+            fi
+            exit 1
+          fi
+          rm -f "$keytool_diag"
+          trap - EXIT
+
+          echo "PRECHECK 4/4: validating private-key password with a temporary CSR."
+          csr_file="$RUNNER_TEMP/galaxy-defender-signing-check.csr"
+          if ! keytool -certreq \
+            -keystore "$signing_dir/galaxy-defender-30.jks" \
+            -storetype PKCS12 \
+            -storepass:env ANDROID_KEYSTORE_PASSWORD \
+            -keypass:env ANDROID_KEY_PASSWORD \
+            -alias "$ANDROID_KEY_ALIAS" \
+            -file "$csr_file"; then
+            rm -f "$csr_file"
+            echo "::error::Private-key password validation failed."
+            exit 1
+          fi
+          if [[ ! -s "$csr_file" ]]; then
+            echo "::error::Private-key validation did not produce a CSR."
+            exit 1
+          fi
+          rm -f "$csr_file"
+          echo "Signing preflight passed: all four checks succeeded."
+
+          export P4A_RELEASE_KEYSTORE="$signing_dir/galaxy-defender-30.jks"
+          export P4A_RELEASE_KEYALIAS="$ANDROID_KEY_ALIAS"
+          export P4A_RELEASE_KEYSTORE_PASSWD="$ANDROID_KEYSTORE_PASSWORD"
+          export P4A_RELEASE_KEYALIAS_PASSWD="$ANDROID_KEY_PASSWORD"
+          export APP_ANDROID_RELEASE_ARTIFACT=apk
+
+          buildozer -v android release 2>&1 | tee build.log
+
+      - name: Verify APK signature and certificate fingerprint
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t apks < <(find bin -maxdepth 1 -type f -name '*-release.apk' -print | sort)
+          if [[ "${#apks[@]}" -ne 1 ]]; then
+            echo "::error::Expected exactly one release APK; found ${#apks[@]}."
+            printf '%s\n' "${apks[@]}"
+            exit 1
+          fi
+
+          sdk_root="$HOME/.buildozer/android/platform/android-sdk"
+          apksigner="$(find "$sdk_root/build-tools" -type f -name apksigner -print | sort -V | tail -n 1)"
+          test -x "$apksigner"
+
+          verification="$("$apksigner" verify --verbose --print-certs "${apks[0]}" 2>&1)" || {
+            printf '%s\n' "$verification"
+            echo "::error::APK signature verification failed."
+            exit 1
+          }
+          printf '%s\n' "$verification"
+
+          actual_fingerprint="$(printf '%s\n' "$verification" | awk -F': ' '/certificate SHA-256 digest:/ {print tolower($NF); exit}')"
+          expected_fingerprint="d13c235508d80e989e393203c294cf787113c5ac6c1fe1ff97390e1bf2f3c339"
+          if [[ "$actual_fingerprint" != "$expected_fingerprint" ]]; then
+            echo "::error::APK certificate fingerprint does not match the configured Galaxy Defender signing key."
+            exit 1
+          fi
+
+          cp "${apks[0]}" bin/Galaxy-Defender-3.5-release-signed.apk
+          echo "APK signature is valid and the signing certificate fingerprint matches."
+
+      - name: Diagnose failed build
+        if: failure()
+        run: |
+          if [[ -s build.log ]]; then
+            python tools/build_doctor.py build.log
+          else
+            printf '%s\n' '# Galaxy Build Doctor' '' 'Build log is empty; failure occurred before Buildozer produced output. See the PRECHECK markers above for the exact failing stage.' > doctor-report.md
+          fi
+
+      - name: Upload Doctor report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Galaxy-Build-Doctor-Report
+          path: doctor-report.md
+          if-no-files-found: ignore
+
+      - name: Upload signed Release APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Galaxy-Defender-3.5-release-signed
+          path: bin/Galaxy-Defender-3.5-release-signed.apk
+          if-no-files-found: error
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Galaxy-Defender-Build-Log
+          path: build.log
+          if-no-files-found: ignore
+ buildozer.spec
+          grep -q '^package.name = galaxydefender35        run: |
+          test -f p4a-recipes/pygame/__init__.py
+          grep -n "2.6.1" p4a-recipes/pygame/__init__.py
+          test -f p4a-recipes/openssl/__init__.py
+          grep -n "mirror.math.princeton.edu/pub/openssl/source" p4a-recipes/openssl/__init__.py
+          test -f p4a-recipes/sdl2_image/__init__.py
+          grep -n "www.libsdl.org/projects/SDL_image/release" p4a-recipes/sdl2_image/__init__.py
+          test -f p4a-recipes/sdl2/__init__.py
+          grep -n "www.libsdl.org/release/SDL2-" p4a-recipes/sdl2/__init__.py
+          test -f p4a-recipes/sdl2_ttf/__init__.py
+          grep -n "SDL2_ttf-{version}.tar.gz" p4a-recipes/sdl2_ttf/__init__.py
+          grep -n "b54e93b100712e3764cd80d4e4b16cd4c2a6853620f675941a4214320b0ee29a583d57ad56cd5fdb5c7a32d7615cbf43bc3fa55337b01623cee7219ebb43667c" p4a-recipes/sdl2_ttf/__init__.py
+          grep -n "cf3098950cb4d853ad95c0841f1f9c6d3dc102dccfcacd521d93925208b76ac8" p4a-recipes/openssl/__init__.py
+          grep -n "p4a.local_recipes" buildozer.spec
+
+      - name: Preflight verified OpenSSL mirror
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/openssl-1.1.1w.tar.gz"
+          curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 "https://mirror.math.princeton.edu/pub/openssl/source/openssl-1.1.1w.tar.gz" --output "$archive"
+          echo "cf3098950cb4d853ad95c0841f1f9c6d3dc102dccfcacd521d93925208b76ac8  $archive" | sha256sum --check
+          rm -f "$archive"
+
+      - name: Preflight official SDL2 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/SDL2-2.28.5.tar.gz"
+          curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 "https://www.libsdl.org/release/SDL2-2.28.5.tar.gz" --output "$archive"
+          echo "a344eb827a03045c9b399e99af4af13d  $archive" | md5sum --check
+          tar -tzf "$archive" >/dev/null
+          echo "Official SDL2 archive downloaded, checksum-verified, and validated."
+          rm -f "$archive"
+
+      - name: Preflight official SDL2_mixer source
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/SDL2_mixer-2.6.3.tar.gz"
+          curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 "https://www.libsdl.org/projects/SDL_mixer/release/SDL2_mixer-2.6.3.tar.gz" --output "$archive"
+          tar -tzf "$archive" >/dev/null
+          echo "Official SDL2_mixer archive downloaded and validated."
+          rm -f "$archive"
+
+      - name: Preflight official SDL2_image source
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/SDL2_image-2.8.0.tar.gz"
+          curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 "https://www.libsdl.org/projects/SDL_image/release/SDL2_image-2.8.0.tar.gz" --output "$archive"
+          tar -tzf "$archive" >/dev/null
+          echo "Official SDL2_image archive downloaded and validated."
+          rm -f "$archive"
+
+      - name: Verify official SDL2_ttf signature and SHA-512
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="2.20.2"
+          filename="SDL2_ttf-${version}.tar.gz"
+          base_url="https://www.libsdl.org/projects/SDL_ttf/release"
+          archive="$RUNNER_TEMP/$filename"
+          signature="$RUNNER_TEMP/$filename.sig"
+          status_file="$RUNNER_TEMP/sdl2_ttf-gpg-status.txt"
+          # SDL currently publishes two trusted release-signing public keys.
+          # The 2023 SDL2_ttf signature may be made by the older key, which GPG
+          # imports as a separate primary key (not as a subkey of the newer key).
+          trusted_fingerprints=(
+            "1528635D8053A57F77D1E08630A59377A7763BE6"
+            "0900104363B4C9D4223DE149D913FE7D4B61D39B"
+          )
+          expected_sha512="b54e93b100712e3764cd80d4e4b16cd4c2a6853620f675941a4214320b0ee29a583d57ad56cd5fdb5c7a32d7615cbf43bc3fa55337b01623cee7219ebb43667c"
+
+          sudo apt-get install -y gnupg
+          curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 "$base_url/$filename" --output "$archive"
+          curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 "$base_url/$filename.sig" --output "$signature"
+
+          # Import the complete public key block published by SDL itself.
+          # Keyserver responses previously supplied the primary key without
+          # the signing subkey used by the 2023 release signature.
+          python - "$RUNNER_TEMP/sdl-signing-keys.asc" <<'PY'
+          from html.parser import HTMLParser
+          from html import unescape
+          import re
+          import sys
+          import urllib.request
+
+          url = "https://libsdl.org/signing-keys.php"
+          with urllib.request.urlopen(url, timeout=30) as response:
+              page = response.read().decode("utf-8")
+          class Text(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.parts = []
+              def handle_data(self, data):
+                  self.parts.append(data)
+          parser = Text()
+          parser.feed(page)
+          text = unescape("\n".join(parser.parts))
+          match = re.search(r"-----BEGIN PGP PUBLIC KEY BLOCK-----.*?-----END PGP PUBLIC KEY BLOCK-----", text, re.S)
+          if not match:
+              raise SystemExit("Could not extract SDL's published OpenPGP key block")
+          with open(sys.argv[1], "w", encoding="ascii") as output:
+              output.write(match.group(0) + "\n")
+          PY
+          gpg --batch --import "$RUNNER_TEMP/sdl-signing-keys.asc"
+          # Confirm both independently published SDL keys are present with
+          # their exact full fingerprints before trusting either signature.
+          for expected_fingerprint in "${trusted_fingerprints[@]}"; do
+            actual_fingerprint="$(gpg --batch --with-colons --fingerprint "$expected_fingerprint" | awk -F: '$1 == "fpr" { print $10; exit }')"
+            test "$actual_fingerprint" = "$expected_fingerprint"
+          done
+
+          if ! gpg --batch --status-fd 1 --verify "$signature" "$archive" >"$status_file" 2>&1; then
+            cat "$status_file"
+            echo "::error::SDL2_ttf detached signature verification failed."
+            exit 1
+          fi
+          cat "$status_file"
+          verified_primary="$(awk '$2 == "VALIDSIG" { print (NF >= 12 ? $12 : $3) }' "$status_file")"
+          trusted_signer=false
+          for expected_fingerprint in "${trusted_fingerprints[@]}"; do
+            if [ "$verified_primary" = "$expected_fingerprint" ]; then
+              trusted_signer=true
+              break
+            fi
+          done
+          if [ "$trusted_signer" != true ]; then
+            echo "::error::SDL2_ttf signature was not made by either pinned SDL release key."
+            exit 1
+          fi
+
+          echo "$expected_sha512  $archive" | sha512sum --check
+          tar -tzf "$archive" >/dev/null
+          echo "SDL2_ttf $version: official signature, pinned key fingerprint, SHA-512, and archive structure verified."
+
+      - name: Prepare Gradle distribution cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="8.0.2"
+          distribution="gradle-${version}-all"
+          wrapper_url="https://services.gradle.org/distributions/${distribution}.zip"
+          expected_sha256="47a5bfed9ef814f90f8debcbbb315e8e7c654109acd224595ea39fca95c5d4da"
+          cache_root="${GRADLE_USER_HOME:-$HOME/.gradle}/wrapper/dists/${distribution}"
+          url_hash="$(printf '%s' "$wrapper_url" | md5sum | cut -d' ' -f1)"
+          cache_dir="$cache_root/$url_hash"
+          mkdir -p "$cache_dir"
+          archive="$cache_dir/${distribution}.zip"
+          mirrors=(
+            "https://repo.huaweicloud.com/repository/toolkit/gradle/${distribution}.zip"
+            "https://mirrors.aliyun.com/gradle/distributions/v${version}/${distribution}.zip"
+            "https://mirror.nju.edu.cn/gradle/${distribution}.zip"
+          )
+          downloaded=0
+          for mirror in "${mirrors[@]}"; do
+            echo "Trying Gradle mirror: $mirror"
+            rm -f "$archive"
+            if curl --fail --location --connect-timeout 20 --max-time 900 --retry 2 --retry-all-errors --retry-delay 3 "$mirror" --output "$archive"; then
+              actual_sha256="$(sha256sum "$archive" | cut -d' ' -f1)"
+              if [[ "$actual_sha256" == "$expected_sha256" ]] && unzip -tq "$archive"; then
+                downloaded=1
+                echo "Gradle archive checksum and ZIP integrity verified."
+                break
+              fi
+              echo "Mirror returned an invalid archive or checksum; trying the next mirror."
+            else
+              echo "Mirror download failed; trying the next mirror."
+            fi
+          done
+          if [[ "$downloaded" -ne 1 ]]; then
+            echo "::error::Could not download a verified Gradle ${version} distribution from any configured mirror."
+            exit 1
+          fi
+          unzip -q "$archive" -d "$cache_dir"
+          test -x "$cache_dir/gradle-${version}/bin/gradle"
+          touch "$cache_dir/${distribution}.zip.ok"
+          echo "Gradle ${version} cached for the Gradle wrapper."
+
+      - name: Build signed Release APK
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # Create the log before any preflight so the failure doctor never receives a missing file.
+          : > build.log
+
+          echo "PRECHECK 1/4: checking required secret presence (values are never printed)."
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Required secret is missing: $name"
+              exit 1
+            fi
+            echo "Present: $name"
+          done
+
+          signing_dir="$RUNNER_TEMP/galaxy-defender-signing"
+          mkdir -p "$signing_dir"
+          echo "PRECHECK 2/4: validating Base64 keystore and decoding JKS."
+          if ! printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$signing_dir/galaxy-defender-30.jks"; then
+            echo "::error::Keystore Base64 decoding failed."
+            exit 1
+          fi
+          if [[ ! -s "$signing_dir/galaxy-defender-30.jks" ]]; then
+            echo "::error::Decoded keystore is empty."
+            exit 1
+          fi
+          chmod 600 "$signing_dir/galaxy-defender-30.jks"
+          echo "Base64 decode passed; keystore file is non-empty."
+          echo "Safe keystore integrity diagnostics (no secret values):"
+          echo "Decoded keystore bytes: $(wc -c < "$signing_dir/galaxy-defender-30.jks" | tr -d " ")"
+          sha256sum "$signing_dir/galaxy-defender-30.jks" | awk '{print "Decoded keystore SHA-256: " $1}'
+
+          echo "PRECHECK 3/4: validating keystore password and alias with keytool."
+          keytool_diag="$(mktemp "$RUNNER_TEMP/keytool-precheck.XXXXXX")"
+          trap 'rm -f "$keytool_diag"' EXIT
+          if keytool -list \
+            -keystore "$signing_dir/galaxy-defender-30.jks" \
+            -storetype PKCS12 \
+            -storepass:env ANDROID_KEYSTORE_PASSWORD \
+            -alias "$ANDROID_KEY_ALIAS" >"$keytool_diag" 2>&1; then
+            echo "Keystore password and alias validation passed."
+          else
+            keytool_status=$?
+            echo "::error::Keystore password or alias validation failed (keytool exit $keytool_status)."
+            echo "Safe keytool diagnostic (secret values are not printed):"
+            if ! grep -Ei 'keytool error:|password|tampered|does not exist|exception|invalid' "$keytool_diag" \
+              | sed -E 's/Alias <[^>]*>/Alias <REDACTED>/g; s/alias [^ ]+/alias <REDACTED>/Ig' \
+              | head -n 5; then
+              echo "keytool did not provide a recognized diagnostic message."
+            fi
+            exit 1
+          fi
+          rm -f "$keytool_diag"
+          trap - EXIT
+
+          echo "PRECHECK 4/4: validating private-key password with a temporary CSR."
+          csr_file="$RUNNER_TEMP/galaxy-defender-signing-check.csr"
+          if ! keytool -certreq \
+            -keystore "$signing_dir/galaxy-defender-30.jks" \
+            -storetype PKCS12 \
+            -storepass:env ANDROID_KEYSTORE_PASSWORD \
+            -keypass:env ANDROID_KEY_PASSWORD \
+            -alias "$ANDROID_KEY_ALIAS" \
+            -file "$csr_file"; then
+            rm -f "$csr_file"
+            echo "::error::Private-key password validation failed."
+            exit 1
+          fi
+          if [[ ! -s "$csr_file" ]]; then
+            echo "::error::Private-key validation did not produce a CSR."
+            exit 1
+          fi
+          rm -f "$csr_file"
+          echo "Signing preflight passed: all four checks succeeded."
+
+          export P4A_RELEASE_KEYSTORE="$signing_dir/galaxy-defender-30.jks"
+          export P4A_RELEASE_KEYALIAS="$ANDROID_KEY_ALIAS"
+          export P4A_RELEASE_KEYSTORE_PASSWD="$ANDROID_KEYSTORE_PASSWORD"
+          export P4A_RELEASE_KEYALIAS_PASSWD="$ANDROID_KEY_PASSWORD"
+          export APP_ANDROID_RELEASE_ARTIFACT=apk
+
+          buildozer -v android release 2>&1 | tee build.log
+
+      - name: Verify APK signature and certificate fingerprint
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t apks < <(find bin -maxdepth 1 -type f -name '*-release.apk' -print | sort)
+          if [[ "${#apks[@]}" -ne 1 ]]; then
+            echo "::error::Expected exactly one release APK; found ${#apks[@]}."
+            printf '%s\n' "${apks[@]}"
+            exit 1
+          fi
+
+          sdk_root="$HOME/.buildozer/android/platform/android-sdk"
+          apksigner="$(find "$sdk_root/build-tools" -type f -name apksigner -print | sort -V | tail -n 1)"
+          test -x "$apksigner"
+
+          verification="$("$apksigner" verify --verbose --print-certs "${apks[0]}" 2>&1)" || {
+            printf '%s\n' "$verification"
+            echo "::error::APK signature verification failed."
+            exit 1
+          }
+          printf '%s\n' "$verification"
+
+          actual_fingerprint="$(printf '%s\n' "$verification" | awk -F': ' '/certificate SHA-256 digest:/ {print tolower($NF); exit}')"
+          expected_fingerprint="d13c235508d80e989e393203c294cf787113c5ac6c1fe1ff97390e1bf2f3c339"
+          if [[ "$actual_fingerprint" != "$expected_fingerprint" ]]; then
+            echo "::error::APK certificate fingerprint does not match the configured Galaxy Defender signing key."
+            exit 1
+          fi
+
+          cp "${apks[0]}" bin/Galaxy-Defender-3.5-release-signed.apk
+          echo "APK signature is valid and the signing certificate fingerprint matches."
+
+      - name: Diagnose failed build
+        if: failure()
+        run: |
+          if [[ -s build.log ]]; then
+            python tools/build_doctor.py build.log
+          else
+            printf '%s\n' '# Galaxy Build Doctor' '' 'Build log is empty; failure occurred before Buildozer produced output. See the PRECHECK markers above for the exact failing stage.' > doctor-report.md
+          fi
+
+      - name: Upload Doctor report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Galaxy-Build-Doctor-Report
+          path: doctor-report.md
+          if-no-files-found: ignore
+
+      - name: Upload signed Release APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Galaxy-Defender-3.5-release-signed
+          path: bin/Galaxy-Defender-3.5-release-signed.apk
+          if-no-files-found: error
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Galaxy-Defender-Build-Log
+          path: build.log
+          if-no-files-found: ignore
+ buildozer.spec
+          grep -q '^version = 3.5        run: |
+          test -f p4a-recipes/pygame/__init__.py
+          grep -n "2.6.1" p4a-recipes/pygame/__init__.py
+          test -f p4a-recipes/openssl/__init__.py
+          grep -n "mirror.math.princeton.edu/pub/openssl/source" p4a-recipes/openssl/__init__.py
+          test -f p4a-recipes/sdl2_image/__init__.py
+          grep -n "www.libsdl.org/projects/SDL_image/release" p4a-recipes/sdl2_image/__init__.py
+          test -f p4a-recipes/sdl2/__init__.py
+          grep -n "www.libsdl.org/release/SDL2-" p4a-recipes/sdl2/__init__.py
+          test -f p4a-recipes/sdl2_ttf/__init__.py
+          grep -n "SDL2_ttf-{version}.tar.gz" p4a-recipes/sdl2_ttf/__init__.py
+          grep -n "b54e93b100712e3764cd80d4e4b16cd4c2a6853620f675941a4214320b0ee29a583d57ad56cd5fdb5c7a32d7615cbf43bc3fa55337b01623cee7219ebb43667c" p4a-recipes/sdl2_ttf/__init__.py
+          grep -n "cf3098950cb4d853ad95c0841f1f9c6d3dc102dccfcacd521d93925208b76ac8" p4a-recipes/openssl/__init__.py
+          grep -n "p4a.local_recipes" buildozer.spec
+
+      - name: Preflight verified OpenSSL mirror
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/openssl-1.1.1w.tar.gz"
+          curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 "https://mirror.math.princeton.edu/pub/openssl/source/openssl-1.1.1w.tar.gz" --output "$archive"
+          echo "cf3098950cb4d853ad95c0841f1f9c6d3dc102dccfcacd521d93925208b76ac8  $archive" | sha256sum --check
+          rm -f "$archive"
+
+      - name: Preflight official SDL2 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/SDL2-2.28.5.tar.gz"
+          curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 "https://www.libsdl.org/release/SDL2-2.28.5.tar.gz" --output "$archive"
+          echo "a344eb827a03045c9b399e99af4af13d  $archive" | md5sum --check
+          tar -tzf "$archive" >/dev/null
+          echo "Official SDL2 archive downloaded, checksum-verified, and validated."
+          rm -f "$archive"
+
+      - name: Preflight official SDL2_mixer source
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/SDL2_mixer-2.6.3.tar.gz"
+          curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 "https://www.libsdl.org/projects/SDL_mixer/release/SDL2_mixer-2.6.3.tar.gz" --output "$archive"
+          tar -tzf "$archive" >/dev/null
+          echo "Official SDL2_mixer archive downloaded and validated."
+          rm -f "$archive"
+
+      - name: Preflight official SDL2_image source
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/SDL2_image-2.8.0.tar.gz"
+          curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 "https://www.libsdl.org/projects/SDL_image/release/SDL2_image-2.8.0.tar.gz" --output "$archive"
+          tar -tzf "$archive" >/dev/null
+          echo "Official SDL2_image archive downloaded and validated."
+          rm -f "$archive"
+
+      - name: Verify official SDL2_ttf signature and SHA-512
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="2.20.2"
+          filename="SDL2_ttf-${version}.tar.gz"
+          base_url="https://www.libsdl.org/projects/SDL_ttf/release"
+          archive="$RUNNER_TEMP/$filename"
+          signature="$RUNNER_TEMP/$filename.sig"
+          status_file="$RUNNER_TEMP/sdl2_ttf-gpg-status.txt"
+          # SDL currently publishes two trusted release-signing public keys.
+          # The 2023 SDL2_ttf signature may be made by the older key, which GPG
+          # imports as a separate primary key (not as a subkey of the newer key).
+          trusted_fingerprints=(
+            "1528635D8053A57F77D1E08630A59377A7763BE6"
+            "0900104363B4C9D4223DE149D913FE7D4B61D39B"
+          )
+          expected_sha512="b54e93b100712e3764cd80d4e4b16cd4c2a6853620f675941a4214320b0ee29a583d57ad56cd5fdb5c7a32d7615cbf43bc3fa55337b01623cee7219ebb43667c"
+
+          sudo apt-get install -y gnupg
+          curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 "$base_url/$filename" --output "$archive"
+          curl --fail --location --retry 4 --retry-all-errors --retry-delay 2 "$base_url/$filename.sig" --output "$signature"
+
+          # Import the complete public key block published by SDL itself.
+          # Keyserver responses previously supplied the primary key without
+          # the signing subkey used by the 2023 release signature.
+          python - "$RUNNER_TEMP/sdl-signing-keys.asc" <<'PY'
+          from html.parser import HTMLParser
+          from html import unescape
+          import re
+          import sys
+          import urllib.request
+
+          url = "https://libsdl.org/signing-keys.php"
+          with urllib.request.urlopen(url, timeout=30) as response:
+              page = response.read().decode("utf-8")
+          class Text(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.parts = []
+              def handle_data(self, data):
+                  self.parts.append(data)
+          parser = Text()
+          parser.feed(page)
+          text = unescape("\n".join(parser.parts))
+          match = re.search(r"-----BEGIN PGP PUBLIC KEY BLOCK-----.*?-----END PGP PUBLIC KEY BLOCK-----", text, re.S)
+          if not match:
+              raise SystemExit("Could not extract SDL's published OpenPGP key block")
+          with open(sys.argv[1], "w", encoding="ascii") as output:
+              output.write(match.group(0) + "\n")
+          PY
+          gpg --batch --import "$RUNNER_TEMP/sdl-signing-keys.asc"
+          # Confirm both independently published SDL keys are present with
+          # their exact full fingerprints before trusting either signature.
+          for expected_fingerprint in "${trusted_fingerprints[@]}"; do
+            actual_fingerprint="$(gpg --batch --with-colons --fingerprint "$expected_fingerprint" | awk -F: '$1 == "fpr" { print $10; exit }')"
+            test "$actual_fingerprint" = "$expected_fingerprint"
+          done
+
+          if ! gpg --batch --status-fd 1 --verify "$signature" "$archive" >"$status_file" 2>&1; then
+            cat "$status_file"
+            echo "::error::SDL2_ttf detached signature verification failed."
+            exit 1
+          fi
+          cat "$status_file"
+          verified_primary="$(awk '$2 == "VALIDSIG" { print (NF >= 12 ? $12 : $3) }' "$status_file")"
+          trusted_signer=false
+          for expected_fingerprint in "${trusted_fingerprints[@]}"; do
+            if [ "$verified_primary" = "$expected_fingerprint" ]; then
+              trusted_signer=true
+              break
+            fi
+          done
+          if [ "$trusted_signer" != true ]; then
+            echo "::error::SDL2_ttf signature was not made by either pinned SDL release key."
+            exit 1
+          fi
+
+          echo "$expected_sha512  $archive" | sha512sum --check
+          tar -tzf "$archive" >/dev/null
+          echo "SDL2_ttf $version: official signature, pinned key fingerprint, SHA-512, and archive structure verified."
+
+      - name: Prepare Gradle distribution cache
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="8.0.2"
+          distribution="gradle-${version}-all"
+          wrapper_url="https://services.gradle.org/distributions/${distribution}.zip"
+          expected_sha256="47a5bfed9ef814f90f8debcbbb315e8e7c654109acd224595ea39fca95c5d4da"
+          cache_root="${GRADLE_USER_HOME:-$HOME/.gradle}/wrapper/dists/${distribution}"
+          url_hash="$(printf '%s' "$wrapper_url" | md5sum | cut -d' ' -f1)"
+          cache_dir="$cache_root/$url_hash"
+          mkdir -p "$cache_dir"
+          archive="$cache_dir/${distribution}.zip"
+          mirrors=(
+            "https://repo.huaweicloud.com/repository/toolkit/gradle/${distribution}.zip"
+            "https://mirrors.aliyun.com/gradle/distributions/v${version}/${distribution}.zip"
+            "https://mirror.nju.edu.cn/gradle/${distribution}.zip"
+          )
+          downloaded=0
+          for mirror in "${mirrors[@]}"; do
+            echo "Trying Gradle mirror: $mirror"
+            rm -f "$archive"
+            if curl --fail --location --connect-timeout 20 --max-time 900 --retry 2 --retry-all-errors --retry-delay 3 "$mirror" --output "$archive"; then
+              actual_sha256="$(sha256sum "$archive" | cut -d' ' -f1)"
+              if [[ "$actual_sha256" == "$expected_sha256" ]] && unzip -tq "$archive"; then
+                downloaded=1
+                echo "Gradle archive checksum and ZIP integrity verified."
+                break
+              fi
+              echo "Mirror returned an invalid archive or checksum; trying the next mirror."
+            else
+              echo "Mirror download failed; trying the next mirror."
+            fi
+          done
+          if [[ "$downloaded" -ne 1 ]]; then
+            echo "::error::Could not download a verified Gradle ${version} distribution from any configured mirror."
+            exit 1
+          fi
+          unzip -q "$archive" -d "$cache_dir"
+          test -x "$cache_dir/gradle-${version}/bin/gradle"
+          touch "$cache_dir/${distribution}.zip.ok"
+          echo "Gradle ${version} cached for the Gradle wrapper."
+
+      - name: Build signed Release APK
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # Create the log before any preflight so the failure doctor never receives a missing file.
+          : > build.log
+
+          echo "PRECHECK 1/4: checking required secret presence (values are never printed)."
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Required secret is missing: $name"
+              exit 1
+            fi
+            echo "Present: $name"
+          done
+
+          signing_dir="$RUNNER_TEMP/galaxy-defender-signing"
+          mkdir -p "$signing_dir"
+          echo "PRECHECK 2/4: validating Base64 keystore and decoding JKS."
+          if ! printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$signing_dir/galaxy-defender-30.jks"; then
+            echo "::error::Keystore Base64 decoding failed."
+            exit 1
+          fi
+          if [[ ! -s "$signing_dir/galaxy-defender-30.jks" ]]; then
+            echo "::error::Decoded keystore is empty."
+            exit 1
+          fi
+          chmod 600 "$signing_dir/galaxy-defender-30.jks"
+          echo "Base64 decode passed; keystore file is non-empty."
+          echo "Safe keystore integrity diagnostics (no secret values):"
+          echo "Decoded keystore bytes: $(wc -c < "$signing_dir/galaxy-defender-30.jks" | tr -d " ")"
+          sha256sum "$signing_dir/galaxy-defender-30.jks" | awk '{print "Decoded keystore SHA-256: " $1}'
+
+          echo "PRECHECK 3/4: validating keystore password and alias with keytool."
+          keytool_diag="$(mktemp "$RUNNER_TEMP/keytool-precheck.XXXXXX")"
+          trap 'rm -f "$keytool_diag"' EXIT
+          if keytool -list \
+            -keystore "$signing_dir/galaxy-defender-30.jks" \
+            -storetype PKCS12 \
+            -storepass:env ANDROID_KEYSTORE_PASSWORD \
+            -alias "$ANDROID_KEY_ALIAS" >"$keytool_diag" 2>&1; then
+            echo "Keystore password and alias validation passed."
+          else
+            keytool_status=$?
+            echo "::error::Keystore password or alias validation failed (keytool exit $keytool_status)."
+            echo "Safe keytool diagnostic (secret values are not printed):"
+            if ! grep -Ei 'keytool error:|password|tampered|does not exist|exception|invalid' "$keytool_diag" \
+              | sed -E 's/Alias <[^>]*>/Alias <REDACTED>/g; s/alias [^ ]+/alias <REDACTED>/Ig' \
+              | head -n 5; then
+              echo "keytool did not provide a recognized diagnostic message."
+            fi
+            exit 1
+          fi
+          rm -f "$keytool_diag"
+          trap - EXIT
+
+          echo "PRECHECK 4/4: validating private-key password with a temporary CSR."
+          csr_file="$RUNNER_TEMP/galaxy-defender-signing-check.csr"
+          if ! keytool -certreq \
+            -keystore "$signing_dir/galaxy-defender-30.jks" \
+            -storetype PKCS12 \
+            -storepass:env ANDROID_KEYSTORE_PASSWORD \
+            -keypass:env ANDROID_KEY_PASSWORD \
+            -alias "$ANDROID_KEY_ALIAS" \
+            -file "$csr_file"; then
+            rm -f "$csr_file"
+            echo "::error::Private-key password validation failed."
+            exit 1
+          fi
+          if [[ ! -s "$csr_file" ]]; then
+            echo "::error::Private-key validation did not produce a CSR."
+            exit 1
+          fi
+          rm -f "$csr_file"
+          echo "Signing preflight passed: all four checks succeeded."
+
+          export P4A_RELEASE_KEYSTORE="$signing_dir/galaxy-defender-30.jks"
+          export P4A_RELEASE_KEYALIAS="$ANDROID_KEY_ALIAS"
+          export P4A_RELEASE_KEYSTORE_PASSWD="$ANDROID_KEYSTORE_PASSWORD"
+          export P4A_RELEASE_KEYALIAS_PASSWD="$ANDROID_KEY_PASSWORD"
+          export APP_ANDROID_RELEASE_ARTIFACT=apk
+
+          buildozer -v android release 2>&1 | tee build.log
+
+      - name: Verify APK signature and certificate fingerprint
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t apks < <(find bin -maxdepth 1 -type f -name '*-release.apk' -print | sort)
+          if [[ "${#apks[@]}" -ne 1 ]]; then
+            echo "::error::Expected exactly one release APK; found ${#apks[@]}."
+            printf '%s\n' "${apks[@]}"
+            exit 1
+          fi
+
+          sdk_root="$HOME/.buildozer/android/platform/android-sdk"
+          apksigner="$(find "$sdk_root/build-tools" -type f -name apksigner -print | sort -V | tail -n 1)"
+          test -x "$apksigner"
+
+          verification="$("$apksigner" verify --verbose --print-certs "${apks[0]}" 2>&1)" || {
+            printf '%s\n' "$verification"
+            echo "::error::APK signature verification failed."
+            exit 1
+          }
+          printf '%s\n' "$verification"
+
+          actual_fingerprint="$(printf '%s\n' "$verification" | awk -F': ' '/certificate SHA-256 digest:/ {print tolower($NF); exit}')"
+          expected_fingerprint="d13c235508d80e989e393203c294cf787113c5ac6c1fe1ff97390e1bf2f3c339"
+          if [[ "$actual_fingerprint" != "$expected_fingerprint" ]]; then
+            echo "::error::APK certificate fingerprint does not match the configured Galaxy Defender signing key."
+            exit 1
+          fi
+
+          cp "${apks[0]}" bin/Galaxy-Defender-3.5-release-signed.apk
+          echo "APK signature is valid and the signing certificate fingerprint matches."
+
+      - name: Diagnose failed build
+        if: failure()
+        run: |
+          if [[ -s build.log ]]; then
+            python tools/build_doctor.py build.log
+          else
+            printf '%s\n' '# Galaxy Build Doctor' '' 'Build log is empty; failure occurred before Buildozer produced output. See the PRECHECK markers above for the exact failing stage.' > doctor-report.md
+          fi
+
+      - name: Upload Doctor report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Galaxy-Build-Doctor-Report
+          path: doctor-report.md
+          if-no-files-found: ignore
+
+      - name: Upload signed Release APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Galaxy-Defender-3.5-release-signed
+          path: bin/Galaxy-Defender-3.5-release-signed.apk
+          if-no-files-found: error
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Galaxy-Defender-Build-Log
+          path: build.log
+          if-no-files-found: ignore
+ buildozer.spec
+          echo "Python syntax and Galaxy Defender 3.5 package metadata verified."
 
       - name: Verify local Android recipes
         run: |
@@ -387,7 +1400,7 @@ jobs:
             exit 1
           fi
 
-          cp "${apks[0]}" bin/Galaxy-Defender-3.4-release-signed.apk
+          cp "${apks[0]}" bin/Galaxy-Defender-3.5-release-signed.apk
           echo "APK signature is valid and the signing certificate fingerprint matches."
 
       - name: Diagnose failed build
@@ -411,8 +1424,8 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: Galaxy-Defender-3.4-release-signed
-          path: bin/Galaxy-Defender-3.4-release-signed.apk
+          name: Galaxy-Defender-3.5-release-signed
+          path: bin/Galaxy-Defender-3.5-release-signed.apk
           if-no-files-found: error
 
       - name: Upload build log
