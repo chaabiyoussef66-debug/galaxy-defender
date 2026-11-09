@@ -6,6 +6,7 @@ on:
     branches:
       - galaxy-defender-3.0
       - galaxy-defender-3.1
+      - galaxy-defender-3.2
 
 jobs:
   build:
@@ -384,7 +385,7 @@ jobs:
             exit 1
           fi
 
-          cp "${apks[0]}" bin/Galaxy-Defender-3.1-release-signed.apk
+          cp "${apks[0]}" bin/Galaxy-Defender-3.2-release-signed.apk
           echo "APK signature is valid and the signing certificate fingerprint matches."
 
       - name: Diagnose failed build
@@ -408,8 +409,8 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: Galaxy-Defender-3.1-release-signed
-          path: bin/Galaxy-Defender-3.1-release-signed.apk
+          name: Galaxy-Defender-3.2-release-signed
+          path: bin/Galaxy-Defender-3.2-release-signed.apk
           if-no-files-found: error
 
       - name: Upload build log
