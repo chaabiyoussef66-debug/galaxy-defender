@@ -273,37 +273,62 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          test -n "$ANDROID_KEYSTORE_BASE64"
-          test -n "$ANDROID_KEYSTORE_PASSWORD"
-          test -n "$ANDROID_KEY_ALIAS"
-          test -n "$ANDROID_KEY_PASSWORD"
+          # Create the log before any preflight so the failure doctor never receives a missing file.
+          : > build.log
+
+          echo "PRECHECK 1/4: checking required secret presence (values are never printed)."
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Required secret is missing: $name"
+              exit 1
+            fi
+            echo "Present: $name"
+          done
 
           signing_dir="$RUNNER_TEMP/galaxy-defender-signing"
           mkdir -p "$signing_dir"
-          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$signing_dir/galaxy-defender-30.jks"
+          echo "PRECHECK 2/4: validating Base64 keystore and decoding JKS."
+          if ! printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$signing_dir/galaxy-defender-30.jks"; then
+            echo "::error::Keystore Base64 decoding failed."
+            exit 1
+          fi
+          if [[ ! -s "$signing_dir/galaxy-defender-30.jks" ]]; then
+            echo "::error::Decoded keystore is empty."
+            exit 1
+          fi
           chmod 600 "$signing_dir/galaxy-defender-30.jks"
+          echo "Base64 decode passed; keystore file is non-empty."
 
-          # Check 1: confirm the decoded JKS opens with the configured store password
-          # and contains the requested signing alias. Never print passwords or key data.
-          keytool -list \
+          echo "PRECHECK 3/4: validating keystore password and alias with keytool."
+          if ! keytool -list \
             -keystore "$signing_dir/galaxy-defender-30.jks" \
             -storetype JKS \
             -storepass:env ANDROID_KEYSTORE_PASSWORD \
-            -alias "$ANDROID_KEY_ALIAS" >/dev/null
+            -alias "$ANDROID_KEY_ALIAS" >/dev/null; then
+            echo "::error::Keystore password or alias validation failed."
+            exit 1
+          fi
+          echo "Keystore password and alias validation passed."
 
-          # Check 2: generate a temporary CSR to prove the private-key password works.
-          # This accesses the private key without exposing it or its password in logs.
+          echo "PRECHECK 4/4: validating private-key password with a temporary CSR."
           csr_file="$RUNNER_TEMP/galaxy-defender-signing-check.csr"
-          keytool -certreq \
+          if ! keytool -certreq \
             -keystore "$signing_dir/galaxy-defender-30.jks" \
             -storetype JKS \
             -storepass:env ANDROID_KEYSTORE_PASSWORD \
             -keypass:env ANDROID_KEY_PASSWORD \
             -alias "$ANDROID_KEY_ALIAS" \
-            -file "$csr_file" >/dev/null
-          test -s "$csr_file"
+            -file "$csr_file"; then
+            rm -f "$csr_file"
+            echo "::error::Private-key password validation failed."
+            exit 1
+          fi
+          if [[ ! -s "$csr_file" ]]; then
+            echo "::error::Private-key validation did not produce a CSR."
+            exit 1
+          fi
           rm -f "$csr_file"
-          echo "Signing preflight passed: keystore password, alias, and private-key password are valid."
+          echo "Signing preflight passed: all four checks succeeded."
 
           export P4A_RELEASE_KEYSTORE="$signing_dir/galaxy-defender-30.jks"
           export P4A_RELEASE_KEYALIAS="$ANDROID_KEY_ALIAS"
@@ -349,12 +374,11 @@ jobs:
       - name: Diagnose failed build
         if: failure()
         run: |
-          python tools/build_doctor.py build.log
-
-      - name: Diagnose failed build
-        if: failure()
-        run: |
-          python tools/build_doctor.py build.log
+          if [[ -s build.log ]]; then
+            python tools/build_doctor.py build.log
+          else
+            printf '%s\n' '# Galaxy Build Doctor' '' 'Build log is empty; failure occurred before Buildozer produced output. See the PRECHECK markers above for the exact failing stage.' > doctor-report.md
+          fi
 
       - name: Upload Doctor report
         if: always()
