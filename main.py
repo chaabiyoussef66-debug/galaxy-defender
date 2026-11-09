@@ -290,10 +290,15 @@ def reset_game():
     global score, lives, level, boss, spawn_timer, shot_timer
     global shield_timer, weapon_timer, boss_done, shake, boss_warning_timer
     global combo, combo_timer, bombs, bomb_flash, sector, sector_banner_timer
+    global weapon_level, max_lives, upgrade_flash_timer, upgrade_message
 
     px, py = W / 2, H - 110
     bullets, enemies, drops, particles, enemy_bullets = [], [], [], [], []
     score, lives, level = 0, SHIP_TYPES[selected_ship]["lives"], 1
+    max_lives = lives
+    weapon_level = 1
+    upgrade_flash_timer = 0
+    upgrade_message = "WEAPON SYSTEM READY"
     boss = None
     spawn_timer = shot_timer = 0
     shield_timer = weapon_timer = 0
@@ -506,6 +511,7 @@ while running:
         boss_warning_timer = max(0, boss_warning_timer - dt)
         combo_timer = max(0, combo_timer - dt)
         bomb_flash = max(0, bomb_flash - dt)
+        upgrade_flash_timer = max(0, upgrade_flash_timer - dt)
         if combo_timer == 0:
             combo = 0
         shake = max(0, shake - dt)
@@ -539,15 +545,26 @@ while running:
         # Auto-fire
         ship_data = SHIP_TYPES[selected_ship]
         normal_fire_rate = ship_data["fire"]
-        if shot_timer > (120 if weapon_timer > 0 else normal_fire_rate):
-            if weapon_timer > 0 or ship_data["spread"]:
+        # Permanent upgrades earned from bosses improve fire rate and damage
+        # for the rest of the current run.
+        fire_interval = max(85, normal_fire_rate - (weapon_level - 1) * 22)
+        if weapon_timer > 0:
+            fire_interval = min(fire_interval, 100)
+        shot_damage = 1 + (weapon_level - 1) // 2
+        if shot_timer > fire_interval:
+            if weapon_level >= 3 or weapon_timer > 0 or ship_data["spread"]:
                 bullets.extend([
-                    [px - 10, py - 24, -1.2],
-                    [px, py - 30, 0],
-                    [px + 10, py - 24, 1.2]
+                    [px - 10, py - 24, -1.2, shot_damage],
+                    [px, py - 30, 0, shot_damage],
+                    [px + 10, py - 24, 1.2, shot_damage]
+                ])
+            elif weapon_level == 2:
+                bullets.extend([
+                    [px - 10, py - 26, -0.5, shot_damage],
+                    [px + 10, py - 26, 0.5, shot_damage]
                 ])
             else:
-                bullets.append([px, py - 28, 0])
+                bullets.append([px, py - 28, 0, shot_damage])
 
             shot_timer = 0
             if random.random() < 0.12:
@@ -598,7 +615,7 @@ while running:
             for b in bullets[:]:
                 if math.hypot(ex - b[0], ey - b[1]) < radius + 9:
                     bullets.remove(b)
-                    e["hp"] -= 1
+                    e["hp"] -= b[3] if len(b) > 3 else 1
                     if e["hp"] <= 0:
                         enemies.remove(e)
                         combo = min(5, combo + 1) if combo_timer > 0 else 1
@@ -690,7 +707,7 @@ while running:
             for b in bullets[:]:
                 if math.hypot(bx - b[0], by - b[1]) < 48:
                     bullets.remove(b)
-                    boss["hp"] -= 1
+                    boss["hp"] -= b[3] if len(b) > 3 else 1
 
             # Boss identity and health
             phase_label = "  - PHASE III" if boss["phase"] == 3 else "  - PHASE II" if boss["phase"] == 2 else ""
@@ -703,10 +720,15 @@ while running:
             if boss["hp"] <= 0:
                 explosion(bx, by, PURPLE, 55)
                 score += 100
-                lives = min(5, lives + 1)
+                # Boss rewards are permanent until this run ends.
+                weapon_level = min(5, weapon_level + 1)
+                max_lives = min(8, max_lives + 1)
+                lives = min(max_lives, lives + 1)
                 bombs = min(4, bombs + 1)
                 shield_timer = max(shield_timer, 2500)
                 weapon_timer = max(weapon_timer, 3500)
+                upgrade_message = "UPGRADE! WEAPON LV " + str(weapon_level) + "  HULL +" 
+                upgrade_flash_timer = 3200
                 boss = None
                 play_sound(power_sound)
 
@@ -745,7 +767,7 @@ while running:
                 elif d[2] == "bomb":
                     bombs = min(4, bombs + 1)
                 else:
-                    lives = min(5, lives + 1)
+                    lives = min(max_lives, lives + 1)
                 drops.remove(d)
                 play_sound(power_sound)
             elif d[1] > H:
@@ -757,7 +779,8 @@ while running:
         text("GALAXY DEFENDER", small, CYAN, 10, 10)
         text("SCORE " + str(score), font, WHITE, 10, 37)
         text("LEVEL " + str(level), font, YELLOW, 10, 101)
-        text("LIVES " + str(lives), font, GREEN, 10, 129)
+        text("LIVES " + str(lives) + "/" + str(max_lives), font, GREEN, 10, 129)
+        text("WEAPON LV " + str(weapon_level), small, YELLOW, 10, 157)
         text("SECTOR " + str(sector) + " - " + SECTOR_NAMES[(sector - 1) % len(SECTOR_NAMES)], small, CYAN, 10, 207)
 
         draw_button(pause_button, "PAUSE", PURPLE)
@@ -777,9 +800,14 @@ while running:
             text("NEW SECTOR: " + SECTOR_NAMES[(sector - 1) % len(SECTOR_NAMES)], small, WHITE, W / 2, banner.centery, True)
 
         if shield_timer > 0:
-            text("SHIELD", small, CYAN, 10, 157)
+            text("SHIELD", small, CYAN, 10, 181)
         if weapon_timer > 0:
-            text("POWER WEAPON", small, YELLOW, 10, 181)
+            text("POWER WEAPON", small, YELLOW, 150, 181)
+        if upgrade_flash_timer > 0:
+            upgrade_box = pygame.Rect(28, 345, W - 56, 54)
+            pygame.draw.rect(screen, (12, 35, 65), upgrade_box, border_radius=12)
+            pygame.draw.rect(screen, YELLOW, upgrade_box, 2, border_radius=12)
+            text(upgrade_message, small, YELLOW, W / 2, upgrade_box.centery, True)
 
         # Shake flash
         if shake > 0:
