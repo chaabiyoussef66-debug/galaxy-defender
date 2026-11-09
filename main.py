@@ -100,6 +100,13 @@ BOSS_PALETTES = [
     ((180, 65, 25), (255, 100, 35), YELLOW),
     ((35, 65, 125), (70, 180, 255), WHITE),
 ]
+SECTOR_NEBULA_PALETTES = [
+    [(35, 10, 80), (8, 35, 85), (65, 12, 60)],
+    [(5, 55, 75), (10, 30, 100), (30, 70, 90)],
+    [(45, 8, 65), (20, 10, 95), (75, 15, 45)],
+    [(75, 25, 8), (90, 35, 10), (55, 15, 60)],
+    [(8, 45, 95), (25, 20, 85), (60, 10, 80)],
+]
 
 font = pygame.font.Font(None, 27)
 small = pygame.font.Font(None, 21)
@@ -189,11 +196,11 @@ for _ in range(9):
 def draw_background():
     screen.fill(BLACK)
 
-    # Soft colorful nebulae
-    for x, y, radius, color in nebulae:
-        pygame.draw.circle(
-            screen, color, (x, y), radius
-        )
+    # Sector-specific nebula colors make each stage visually distinct.
+    sector_palette = SECTOR_NEBULA_PALETTES[(sector - 1) % len(SECTOR_NEBULA_PALETTES)]
+    for index, (x, y, radius, color) in enumerate(nebulae):
+        color = sector_palette[index % len(sector_palette)]
+        pygame.draw.circle(screen, color, (x, y), radius)
 
     # Moving stars with gentle twinkle
     for s in stars:
