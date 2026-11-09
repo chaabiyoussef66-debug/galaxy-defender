@@ -304,7 +304,7 @@ jobs:
           trap 'rm -f "$keytool_diag"' EXIT
           if keytool -list \
             -keystore "$signing_dir/galaxy-defender-30.jks" \
-            -storetype JKS \
+            -storetype PKCS12 \
             -storepass:env ANDROID_KEYSTORE_PASSWORD \
             -alias "$ANDROID_KEY_ALIAS" >"$keytool_diag" 2>&1; then
             echo "Keystore password and alias validation passed."
@@ -326,7 +326,7 @@ jobs:
           csr_file="$RUNNER_TEMP/galaxy-defender-signing-check.csr"
           if ! keytool -certreq \
             -keystore "$signing_dir/galaxy-defender-30.jks" \
-            -storetype JKS \
+            -storetype PKCS12 \
             -storepass:env ANDROID_KEYSTORE_PASSWORD \
             -keypass:env ANDROID_KEY_PASSWORD \
             -alias "$ANDROID_KEY_ALIAS" \
