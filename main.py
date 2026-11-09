@@ -67,7 +67,7 @@ try:
 except Exception:
     AUDIO = False
 
-pygame.display.set_caption("GALAXY DEFENDER 3.3")
+pygame.display.set_caption("GALAXY DEFENDER 3.5")
 display_info = pygame.display.Info()
 display_w = max(1, display_info.current_w or 480)
 display_h = max(1, display_info.current_h or 854)
@@ -534,8 +534,9 @@ while running:
                         enemies.clear()
                         enemy_bullets.clear()
                         if boss is not None:
-                            boss["hp"] -= 18
-                        explosion(px, py, YELLOW, 45)
+                            boss["hp"] -= 30
+                        explosion(px, py, YELLOW, 65)
+                        play_sound(explosion_sound)
                         play_sound(power_sound)
                 elif rocket_button.collidepoint(pos):
                     if rockets > 0:
@@ -664,17 +665,36 @@ while running:
                 play_sound(laser_sound)
 
         for b in bullets[:]:
-            b[1] -= 10
-            b[0] += b[2]
-            pygame.draw.line(
-                screen, CYAN,
-                (int(b[0]), int(b[1] + 12)),
-                (int(b[0]), int(b[1])),
-                4
-            )
-            pygame.draw.circle(
-                screen, WHITE, (int(b[0]), int(b[1])), 2
-            )
+            bullet_kind = b[4] if len(b) > 4 else "laser"
+            if bullet_kind == "rocket":
+                # Rockets steer toward the boss or the nearest living enemy.
+                if boss is not None:
+                    target_x, target_y = boss["x"], boss["y"]
+                elif enemies:
+                    target = min(enemies, key=lambda e: math.hypot(e["x"] - b[0], e["y"] - b[1]))
+                    target_x, target_y = target["x"], target["y"]
+                else:
+                    target_x, target_y = b[0], -80
+                b[0] += max(-4.5, min(4.5, (target_x - b[0]) * 0.12))
+                b[1] -= 8.5
+                pygame.draw.line(screen, ORANGE,
+                    (int(b[0]), int(b[1] + 17)), (int(b[0]), int(b[1] - 5)), 6)
+                pygame.draw.circle(screen, YELLOW, (int(b[0]), int(b[1] - 4)), 4)
+                pygame.draw.circle(screen, WHITE, (int(b[0]), int(b[1] - 5)), 2)
+            elif bullet_kind == "blade":
+                b[1] -= 10
+                b[0] += b[2]
+                pygame.draw.line(screen, WHITE,
+                    (int(b[0] - 5), int(b[1] + 8)),
+                    (int(b[0] + 5), int(b[1] - 8)), 4)
+                pygame.draw.circle(screen, CYAN, (int(b[0]), int(b[1])), 3)
+            else:
+                b[1] -= 10
+                b[0] += b[2]
+                pygame.draw.line(screen, CYAN,
+                    (int(b[0]), int(b[1] + 12)),
+                    (int(b[0]), int(b[1])), 4)
+                pygame.draw.circle(screen, WHITE, (int(b[0]), int(b[1])), 2)
             if b[1] < -25:
                 bullets.remove(b)
 
@@ -683,7 +703,7 @@ while running:
             kind = random.choices(["scout", "armored", "shooter", "spiderling", "roach"], weights=[38, 18, 14, 18, 12], k=1)[0]
             base = {"scout": (3.4, 13, 1), "armored": (1.25, 22, 3), "shooter": (2.0, 17, 1), "spiderling": (2.7, 12, 2), "roach": (2.1, 16, 2)}[kind]
             enemies.append({"x": random.randint(25, W - 25), "y": -25,
-                "speed": base[0] + level * 0.10, "radius": base[1],
+                "speed": min(6.2, base[0] + level * 0.10), "radius": base[1],
                 "kind": kind, "hp": base[2], "fire": random.randint(700, 1500)})
             spawn_timer = 0
 
@@ -831,7 +851,7 @@ while running:
                 pygame.draw.circle(screen, WHITE, (bx, by), 5)
 
             for b in bullets[:]:
-                if math.hypot(bx - b[0], by - b[1]) < 48:
+                if math.hypot(bx - b[0], by - b[1]) < (62 if boss.get("spider") else 48):
                     bullets.remove(b)
                     boss["hp"] -= b[3] if len(b) > 3 else 1
 
