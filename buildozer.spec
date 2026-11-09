@@ -31,6 +31,9 @@ android.ndk_api = 24
 
 android.archs = arm64-v8a
 
+# Force Buildozer release builds to produce an installable APK, not an AAB.
+android.release_artifact = apk
+
 p4a.bootstrap = sdl2
 
 p4a.branch = v2024.01.21
