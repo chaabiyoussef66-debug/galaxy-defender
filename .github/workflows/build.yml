@@ -409,7 +409,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Galaxy-Defender-3.1-release-signed
-          path: bin/Galaxy-Defender-3.0-release-signed.apk
+          path: bin/Galaxy-Defender-3.1-release-signed.apk
           if-no-files-found: error
 
       - name: Upload build log
