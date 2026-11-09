@@ -67,7 +67,7 @@ try:
 except Exception:
     AUDIO = False
 
-pygame.display.set_caption("GALAXY DEFENDER 3.2")
+pygame.display.set_caption("GALAXY DEFENDER 3.3")
 display_info = pygame.display.Info()
 display_w = max(1, display_info.current_w or 480)
 display_h = max(1, display_info.current_h or 854)
@@ -272,6 +272,51 @@ def draw_ship(x, y, shield=False, ship_type=0):
     if shield:
         pygame.draw.circle(screen, CYAN, (x, y), 37, 3)
         pygame.draw.circle(screen, BLUE, (x, y), 42, 1)
+
+def draw_octopus_boss(bx, by, phase):
+    """Draw the final boss as a living alien octopus with animated tentacles."""
+    tick = pygame.time.get_ticks() / 1000.0
+    tentacle_color = (145, 35, 205)
+    edge_color = (255, 70, 125)
+
+    # Eight independently waving tentacles, four on each side.
+    tips = []
+    for i in range(8):
+        side = -1 if i < 4 else 1
+        row = i if i < 4 else i - 4
+        start_x = bx + side * (17 + row * 8)
+        start_y = by + 18 + row * 3
+        reach = 72 + row * 18
+        wave = math.sin(tick * (2.2 + row * 0.25) + i * 0.9) * (10 + phase * 3)
+        tip_x = bx + side * (reach + wave)
+        tip_y = by + 52 + row * 13 + math.cos(tick * 1.7 + i) * 9
+        points = []
+        for step in range(7):
+            t = step / 6
+            curve_x = start_x + (tip_x - start_x) * t
+            curve_y = start_y + (tip_y - start_y) * t + math.sin(t * math.pi + tick * 2 + i) * 13 * t
+            points.append((int(curve_x), int(curve_y)))
+        pygame.draw.lines(screen, tentacle_color, False, points, 13 - row)
+        pygame.draw.lines(screen, edge_color, False, points, 3)
+        for suction in range(1, 6):
+            t = suction / 6
+            sx = int(start_x + (tip_x - start_x) * t)
+            sy = int(start_y + (tip_y - start_y) * t + math.sin(t * math.pi + tick * 2 + i) * 13 * t)
+            pygame.draw.circle(screen, (255, 155, 190), (sx, sy), 3)
+        tips.append((tip_x, tip_y))
+
+    # Armored alien head, glowing eyes and a tooth-filled mouth.
+    pygame.draw.ellipse(screen, (65, 15, 105), (bx - 57, by - 53, 114, 112))
+    pygame.draw.ellipse(screen, (185, 45, 160), (bx - 51, by - 49, 102, 100), 5)
+    pygame.draw.circle(screen, (255, 55, 35), (bx - 22, by - 8), 13)
+    pygame.draw.circle(screen, (255, 225, 90), (bx - 22, by - 8), 6)
+    pygame.draw.circle(screen, (255, 55, 35), (bx + 22, by - 8), 13)
+    pygame.draw.circle(screen, (255, 225, 90), (bx + 22, by - 8), 6)
+    pygame.draw.ellipse(screen, (25, 3, 20), (bx - 25, by + 12, 50, 31))
+    for tooth_x in range(-18, 19, 9):
+        pygame.draw.polygon(screen, WHITE, [(bx + tooth_x, by + 13), (bx + tooth_x + 4, by + 25), (bx + tooth_x + 8, by + 13)])
+    pygame.draw.ellipse(screen, (255, 90, 145), (bx - 57, by - 53, 114, 112), 2)
+    return tips
 
 def explosion(x, y, color, amount=22):
     for _ in range(amount):
@@ -532,10 +577,11 @@ while running:
                 "hp": boss_hp,
                 "maxhp": boss_hp,
                 "dir": 1, "fire": 0,
-                "name": "OMEGA OVERLORD" if ultimate_boss else BOSS_NAMES[(sector - 1) % len(BOSS_NAMES)],
+                "name": "VOID OCTOPUS" if ultimate_boss else BOSS_NAMES[(sector - 1) % len(BOSS_NAMES)],
                 "style": (sector - 1) % len(BOSS_PALETTES),
                 "phase": 1, "pattern": 0,
-                "ultimate": ultimate_boss
+                "ultimate": ultimate_boss,
+                "octopus": ultimate_boss
             }
             boss_warning_timer = 2200
             boss_done = level
@@ -671,7 +717,15 @@ while running:
             boss["fire"] += dt
             fire_interval = 900 if boss["phase"] == 1 else 540 if boss["phase"] == 2 else 380
             if boss["fire"] > fire_interval:
-                if boss["phase"] == 1:
+                if boss.get("octopus"):
+                    # The octopus fires from its tentacles; each phase adds lanes.
+                    lanes = 3 if boss["phase"] == 1 else 5 if boss["phase"] == 2 else 7
+                    spread = 22 if boss["phase"] == 1 else 28
+                    for lane in range(lanes):
+                        dx = (lane - (lanes - 1) / 2) * spread
+                        speed = 3.8 + boss["phase"] * 0.75
+                        enemy_bullets.append([boss["x"] + dx, boss["y"] + 65, speed])
+                elif boss["phase"] == 1:
                     shots = [(-36, 3.6), (0, 4.1), (36, 3.6)]
                 elif boss["phase"] == 2:
                     # Phase II cycles through wider, denser attack waves.
@@ -686,23 +740,27 @@ while running:
                     # Every boss becomes enraged below 20% health and fires a heavy seven-lane volley.
                     shots = [(-84, 5.0), (-56, 5.3), (-28, 5.6), (0, 5.9),
                              (28, 5.6), (56, 5.3), (84, 5.0)]
-                for dx, speed in shots:
-                    enemy_bullets.append([boss["x"] + dx, boss["y"] + 32, speed])
+                if not boss.get("octopus"):
+                    for dx, speed in shots:
+                        enemy_bullets.append([boss["x"] + dx, boss["y"] + 32, speed])
                 boss["fire"] = 0
 
             bx, by = int(boss["x"]), int(boss["y"])
 
             # Sector-specific boss colors and identity.
             boss_color, boss_core, boss_glow = BOSS_PALETTES[boss["style"]]
-            pygame.draw.circle(screen, boss_glow, (bx, by), 59)
-            pygame.draw.circle(screen, boss_color, (bx, by), 49, 3)
-            pygame.draw.polygon(screen, boss_core, [
-                (bx, by - 40), (bx - 55, by - 12),
-                (bx - 42, by + 30), (bx, by + 18),
-                (bx + 42, by + 30), (bx + 55, by - 12)
-            ])
-            pygame.draw.circle(screen, boss_glow, (bx, by), 14)
-            pygame.draw.circle(screen, WHITE, (bx, by), 5)
+            if boss.get("octopus"):
+                draw_octopus_boss(bx, by, boss["phase"])
+            else:
+                pygame.draw.circle(screen, boss_glow, (bx, by), 59)
+                pygame.draw.circle(screen, boss_color, (bx, by), 49, 3)
+                pygame.draw.polygon(screen, boss_core, [
+                    (bx, by - 40), (bx - 55, by - 12),
+                    (bx - 42, by + 30), (bx, by + 18),
+                    (bx + 42, by + 30), (bx + 55, by - 12)
+                ])
+                pygame.draw.circle(screen, boss_glow, (bx, by), 14)
+                pygame.draw.circle(screen, WHITE, (bx, by), 5)
 
             for b in bullets[:]:
                 if math.hypot(bx - b[0], by - b[1]) < 48:
