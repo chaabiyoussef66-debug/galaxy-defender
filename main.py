@@ -67,9 +67,18 @@ try:
 except Exception:
     AUDIO = False
 
-W, H = 480, 760
-screen = pygame.display.set_mode((W, H))
 pygame.display.set_caption("GALAXY DEFENDER ULTIMATE V2")
+display_info = pygame.display.Info()
+display_w = max(1, display_info.current_w or 480)
+display_h = max(1, display_info.current_h or 854)
+display_surface = pygame.display.set_mode((display_w, display_h), pygame.FULLSCREEN)
+display_w, display_h = display_surface.get_size()
+
+# Keep the game's original 480x760 coordinate system so every button,
+# collision, and gameplay position remains consistent. Stretch only the
+# final frame to the real portrait display to eliminate unused screen areas.
+W, H = 480, 760
+screen = pygame.Surface((W, H)).convert()
 clock = pygame.time.Clock()
 
 BLACK = (3, 5, 22)
@@ -333,7 +342,7 @@ while running:
                 sound_on = not sound_on
 
         elif event.type == pygame.MOUSEBUTTONDOWN:
-            pos = event.pos
+            pos = (int(event.pos[0] * W / display_w), int(event.pos[1] * H / display_h))
 
             if sound_button.collidepoint(pos):
                 sound_on = not sound_on
@@ -389,7 +398,7 @@ while running:
 
         elif event.type == pygame.MOUSEMOTION:
             if touching:
-                touch_pos = event.pos
+                touch_pos = (int(event.pos[0] * W / display_w), int(event.pos[1] * H / display_h))
 
         elif event.type == pygame.MOUSEBUTTONUP:
             touching = False
@@ -779,6 +788,8 @@ while running:
         draw_button(exit_button, "EXIT GAME", RED)
         draw_button(cancel_exit_button, "CANCEL", GREEN)
 
+    scaled_frame = pygame.transform.scale(screen, (display_w, display_h))
+    display_surface.blit(scaled_frame, (0, 0))
     pygame.display.flip()
 
 pygame.quit()
