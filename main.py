@@ -67,7 +67,7 @@ try:
 except Exception:
     AUDIO = False
 
-pygame.display.set_caption("GALAXY DEFENDER ULTIMATE V2")
+pygame.display.set_caption("GALAXY DEFENDER 3.1")
 display_info = pygame.display.Info()
 display_w = max(1, display_info.current_w or 480)
 display_h = max(1, display_info.current_h or 854)
@@ -90,6 +90,16 @@ RED = (255, 65, 85)
 ORANGE = (255, 170, 50)
 GREEN = (80, 255, 150)
 YELLOW = (255, 230, 80)
+
+SECTOR_NAMES = ["ORION", "NEBULA", "VOID", "NOVA", "OMEGA"]
+BOSS_NAMES = ["ORION WARDEN", "NEBULA TITAN", "VOID REAPER", "NOVA COLOSSUS", "OMEGA CORE"]
+BOSS_PALETTES = [
+    (PURPLE, RED, ORANGE),
+    (BLUE, CYAN, WHITE),
+    ((90, 35, 150), (190, 55, 255), (80, 20, 120)),
+    ((180, 65, 25), (255, 100, 35), YELLOW),
+    ((35, 65, 125), (70, 180, 255), WHITE),
+]
 
 font = pygame.font.Font(None, 27)
 small = pygame.font.Font(None, 21)
@@ -272,7 +282,7 @@ def reset_game():
     global px, py, bullets, enemies, drops, particles, enemy_bullets
     global score, lives, level, boss, spawn_timer, shot_timer
     global shield_timer, weapon_timer, boss_done, shake, boss_warning_timer
-    global combo, combo_timer, bombs, bomb_flash
+    global combo, combo_timer, bombs, bomb_flash, sector, sector_banner_timer
 
     px, py = W / 2, H - 110
     bullets, enemies, drops, particles, enemy_bullets = [], [], [], [], []
@@ -284,6 +294,7 @@ def reset_game():
     boss_warning_timer = 0
     shake = 0
     combo, combo_timer, bombs, bomb_flash = 0, 0, 2, 0
+    sector, sector_banner_timer = 1, 0
 
 MENU, SELECT_SHIP, PLAY, PAUSE, OVER, EXIT_CONFIRM = range(6)
 state = MENU
@@ -493,14 +504,22 @@ while running:
         shake = max(0, shake - dt)
 
         level = score // 100 + 1
+        new_sector = (level - 1) // 5 + 1
+        if new_sector > sector:
+            sector = new_sector
+            sector_banner_timer = 2800
+        sector_banner_timer = max(0, sector_banner_timer - dt)
 
-        # Boss every five levels
+        # A major boss closes each five-level sector.
         if level % 5 == 0 and boss is None and boss_done < level:
             boss = {
                 "x": W / 2, "y": 155,
-                "hp": 40 + level * 5,
-                "maxhp": 40 + level * 5,
-                "dir": 1, "fire": 0
+                "hp": 85 + level * 7,
+                "maxhp": 85 + level * 7,
+                "dir": 1, "fire": 0,
+                "name": BOSS_NAMES[(sector - 1) % len(BOSS_NAMES)],
+                "style": (sector - 1) % len(BOSS_PALETTES),
+                "phase": 1, "pattern": 0
             }
             boss_warning_timer = 2200
             boss_done = level
@@ -601,10 +620,11 @@ while running:
 
         # Boss
         if boss is not None:
-            boss_speed = (2 + level * 0.08)
-            # The boss becomes faster in its final half of health.
-            if boss["hp"] <= boss["maxhp"] * 0.5:
-                boss_speed *= 1.4
+            boss["phase"] = 2 if boss["hp"] <= boss["maxhp"] * 0.5 else 1
+            boss_speed = 2.0 + level * 0.07
+            # Phase II is faster and more aggressive below 50% health.
+            if boss["phase"] == 2:
+                boss_speed *= 1.55
             boss["x"] += boss["dir"] * boss_speed
 
             if boss["x"] > W - 75:
@@ -613,25 +633,35 @@ while running:
                 boss["dir"] = 1
 
             boss["fire"] += dt
-            fire_interval = 650 if boss["hp"] <= boss["maxhp"] * 0.5 else 900
+            fire_interval = 900 if boss["phase"] == 1 else 540
             if boss["fire"] > fire_interval:
-                for dx, speed in [(-30, 3.5), (0, 4), (30, 3.5)]:
-                    enemy_bullets.append([
-                        boss["x"] + dx, boss["y"] + 32, speed
-                    ])
+                if boss["phase"] == 1:
+                    shots = [(-36, 3.6), (0, 4.1), (36, 3.6)]
+                else:
+                    # Phase II cycles through three wider, denser attack waves.
+                    patterns = [
+                        [(-64, 4.2), (-32, 4.5), (0, 4.8), (32, 4.5), (64, 4.2)],
+                        [(-42, 5.0), (-14, 5.3), (14, 5.3), (42, 5.0)],
+                        [(-72, 4.7), (-48, 4.9), (-24, 5.1), (0, 5.3), (24, 5.1), (48, 4.9), (72, 4.7)],
+                    ]
+                    shots = patterns[boss["pattern"] % len(patterns)]
+                    boss["pattern"] = (boss["pattern"] + 1) % len(patterns)
+                for dx, speed in shots:
+                    enemy_bullets.append([boss["x"] + dx, boss["y"] + 32, speed])
                 boss["fire"] = 0
 
             bx, by = int(boss["x"]), int(boss["y"])
 
-            # Boss glow
-            pygame.draw.circle(screen, (45, 15, 100), (bx, by), 59)
-            pygame.draw.circle(screen, PURPLE, (bx, by), 49, 3)
-            pygame.draw.polygon(screen, RED, [
+            # Sector-specific boss colors and identity.
+            boss_color, boss_core, boss_glow = BOSS_PALETTES[boss["style"]]
+            pygame.draw.circle(screen, boss_glow, (bx, by), 59)
+            pygame.draw.circle(screen, boss_color, (bx, by), 49, 3)
+            pygame.draw.polygon(screen, boss_core, [
                 (bx, by - 40), (bx - 55, by - 12),
                 (bx - 42, by + 30), (bx, by + 18),
                 (bx + 42, by + 30), (bx + 55, by - 12)
             ])
-            pygame.draw.circle(screen, ORANGE, (bx, by), 14)
+            pygame.draw.circle(screen, boss_glow, (bx, by), 14)
             pygame.draw.circle(screen, WHITE, (bx, by), 5)
 
             for b in bullets[:]:
@@ -639,7 +669,9 @@ while running:
                     bullets.remove(b)
                     boss["hp"] -= 1
 
-            # Boss health
+            # Boss identity and health
+            phase_label = "  - PHASE II" if boss["phase"] == 2 else ""
+            text(boss["name"] + phase_label, small, boss_core, W / 2, 108, True)
             bw = 230
             pygame.draw.rect(screen, RED, (W // 2 - 115, 130, bw, 10))
             hpw = max(0, int(bw * boss["hp"] / boss["maxhp"]))
@@ -650,6 +682,8 @@ while running:
                 score += 100
                 lives = min(5, lives + 1)
                 bombs = min(4, bombs + 1)
+                shield_timer = max(shield_timer, 2500)
+                weapon_timer = max(weapon_timer, 3500)
                 boss = None
                 play_sound(power_sound)
 
@@ -694,6 +728,7 @@ while running:
         text("SCORE " + str(score), font, WHITE, 10, 37)
         text("LEVEL " + str(level), font, YELLOW, 10, 101)
         text("LIVES " + str(lives), font, GREEN, 10, 129)
+        text("SECTOR " + str(sector) + " - " + SECTOR_NAMES[(sector - 1) % len(SECTOR_NAMES)], small, CYAN, 10, 207)
 
         draw_button(pause_button, "PAUSE", PURPLE)
         draw_button(bomb_button, "BOMB x" + str(bombs), YELLOW)
@@ -705,6 +740,11 @@ while running:
             pygame.draw.rect(screen, RED, warning_box, 2, border_radius=12)
             text("WARNING: BOSS APPROACHING!", font, YELLOW,
                  W / 2, warning_box.centery, True)
+        if sector_banner_timer > 0:
+            banner = pygame.Rect(45, 285, W - 90, 48)
+            pygame.draw.rect(screen, (10, 25, 65), banner, border_radius=10)
+            pygame.draw.rect(screen, CYAN, banner, 2, border_radius=10)
+            text("NEW SECTOR: " + SECTOR_NAMES[(sector - 1) % len(SECTOR_NAMES)], small, WHITE, W / 2, banner.centery, True)
 
         if shield_timer > 0:
             text("SHIELD", small, CYAN, 10, 157)
