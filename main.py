@@ -571,17 +571,20 @@ while running:
         # A major boss closes each five-level sector.
         if level % 5 == 0 and boss is None and boss_done < level:
             ultimate_boss = level >= 25
+            # The alien octopus is the signature boss from the very first boss encounter.
+            # Its health scales normally early and gains the ultimate bonus only at level 25.
+            octopus_boss = True
             boss_hp = int((85 + level * 7) * (1.5 if ultimate_boss else 1.0))
             boss = {
                 "x": W / 2, "y": 155,
                 "hp": boss_hp,
                 "maxhp": boss_hp,
                 "dir": 1, "fire": 0,
-                "name": "VOID OCTOPUS" if ultimate_boss else BOSS_NAMES[(sector - 1) % len(BOSS_NAMES)],
+                "name": "VOID OCTOPUS" if ultimate_boss else "SPACE OCTOPUS",
                 "style": (sector - 1) % len(BOSS_PALETTES),
                 "phase": 1, "pattern": 0,
                 "ultimate": ultimate_boss,
-                "octopus": ultimate_boss
+                "octopus": octopus_boss
             }
             boss_warning_timer = 2200
             boss_done = level
